@@ -121,7 +121,29 @@ class KoptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             output,
-            source.replace(b"br 1, join, shared", b"jmp join").replace(b"br v0, join, join", b"jmp join"),
+            b"func test(v0)\nentry:\n  br v0, join, shared\nshared:\n  vstore 0, 7\n"
+            b"  jmp join\njoin:\n  ret 0\n",
+        )
+
+    def test_jump_threading_preserves_reachable_jump_cycle(self):
+        source = (
+            b"func test(v0)\nentry:\n  br v0, hop, done\nhop:\n  jmp first\n"
+            b"first:\n  jmp second\nsecond:\n  jmp first\ndone:\n  ret 7\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source)
+
+    def test_jump_threading_keeps_entry_label_and_folds_equal_targets(self):
+        source = (
+            b"func test(v0)\nentry:\n  jmp dispatch\ndispatch:\n  br v0, left, right\n"
+            b"left:\n  jmp tail\nright:\n  jmp tail\ntail:\n  ret 7\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            output,
+            b"func test(v0)\nentry:\n  jmp dispatch\ndispatch:\n  jmp tail\ntail:\n  ret 7\n",
         )
 
     def test_redundant_expression_reuses_only_a_current_holder(self):

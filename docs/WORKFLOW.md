@@ -14,7 +14,7 @@ For each change, write down the fact that makes the rewrite safe. Add a small te
 
 ## Current handoff
 
-- **State** — Copy elision and power-of-two shift-add selection now run alongside existing fusion. Run `python3 tests/benchmark.py /path/to/LLH-26/Compilers/COMP10 --jobs 4` using the external starter kit.
-- **Latest evidence** — All 500 public sample comparisons agreed across five machines. Of those, 429 saved cycles and 71 tied. Default-machine totals fell from 103,671 original cycles to 46,679, compared with 68,522 in the previous revision. On that machine, `spill_storm` fell from 3,576 to 1,860 cycles and `paren_depth` fell from 1,030 to 701. Fourteen CLI tests and 3,030 additional official validator comparisons passed.
-- **Next change** — Evaluate forwarding branches through blocks that contain only a jump. Preserve reachable jump cycles and the entry label, then measure the effect on fallthrough and taken-branch penalties.
+- **State** — Jump threading now bypasses chains before reachability and liveness. It preserves the entry label and paths into jump cycles. Run `python3 tests/benchmark.py /path/to/LLH-26/Compilers/COMP10 --jobs 4` using the external starter kit.
+- **Latest evidence** — All 500 public sample comparisons agreed across five machines. Compared with the original KIR, 434 saved cycles and 66 tied. Compared with the previous revision, 49 saved cycles and 451 tied. The default-machine total fell from 46,679 to 46,257 cycles, including `jump_chain` from 59 to 57. Sixteen CLI tests and 3,030 official validator comparisons passed. A generated 100,000-block chain took about 0.72 seconds on the development Mac and produced identical output under two hash seeds.
+- **Next change** — Evaluate profile-guided block layout. Preserve explicit branch targets and the entry position, and compare against the current layout with both supplied profiles and inaccurate profiles.
 - **Update before ending a session** — Record the latest verified command or benchmark, any open issue, and the next concrete step. Update [DESIGN.md](../DESIGN.md) for shipped passes and [Decisions](DECISIONS.md) for changed choices.

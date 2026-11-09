@@ -229,6 +229,44 @@ def branch_targets(block):
     return tuple(dict.fromkeys(value for kind, value in block[-1].args if kind == "l"))
 
 
+def thread_jumps(blocks, edits):
+    jumps = {
+        label: block[-1].args[0][1]
+        for label, block in blocks.items()
+        if len(block) == 1 and block[-1].op == "jmp"
+    }
+    if not jumps:
+        return
+
+    destinations = {}
+    for label in jumps:
+        path = []
+        target = label
+        while target in jumps and target not in destinations:
+            destinations[target] = None
+            path.append(target)
+            target = jumps[target]
+        # Revisiting a pending jump means the path enters a cycle.
+        destination = destinations.get(target, target)
+        for hop in path:
+            destinations[hop] = destination
+
+    for block in blocks.values():
+        original = block[-1]
+        args = [
+            (kind, destinations.get(value) or value) if kind == "l" else (kind, value)
+            for kind, value in original.args
+        ]
+        if args == original.args:
+            continue
+        op = original.op
+        if op == "br" and args[1] == args[2]:
+            op, args = "jmp", [args[1]]
+        replacement = Instr(op, args, original.line, original.text)
+        block[-1] = replacement
+        edits[original.line] = replacement
+
+
 def remove_unreachable_blocks(blocks, program, edits):
     entry = program.block_labels[0]
     reachable = {entry}
@@ -332,6 +370,7 @@ def optimize(program, source, machine):
         blocks[label] = simplify_block(
             program.instrs[start:end], machine, edits, shared_registers, may_spill,
         )
+    thread_jumps(blocks, edits)
     remove_unreachable_blocks(blocks, program, edits)
     remove_dead_code(blocks, edits, machine, may_spill)
     return render(source, edits) if edits else None
