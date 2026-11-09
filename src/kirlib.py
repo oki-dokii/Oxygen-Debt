@@ -75,6 +75,7 @@ class Program(object):
         self.params = []        # register indices
         self.instrs = []        # all instructions in layout order
         self.labels = {}        # label -> index of first instruction
+        self.label_lines = {}   # label -> source line number
         self.block_labels = []  # labels in layout order
         self.block_of = []      # for each instruction index, its block label
 
@@ -110,7 +111,6 @@ def parse_program(text):
     prog = Program()
     seen_func = False
     blocks = []                 # list of (label, line, [Instr])
-    label_lines = {}
     for lineno, raw in enumerate(text.splitlines(), 1):
         line = raw.split(';', 1)[0].strip()
         if not line:
@@ -144,9 +144,9 @@ def parse_program(text):
             name = m.group(1)
             if REG_RE.match(name):
                 raise KirError("label '%s' looks like a register name" % name, lineno)
-            if name in label_lines:
-                raise KirError("label '%s' is defined twice (first on line %d)" % (name, label_lines[name]), lineno)
-            label_lines[name] = lineno
+            if name in prog.label_lines:
+                raise KirError("label '%s' is defined twice (first on line %d)" % (name, prog.label_lines[name]), lineno)
+            prog.label_lines[name] = lineno
             blocks.append((name, lineno, []))
             continue
         parts = line.split(None, 1)

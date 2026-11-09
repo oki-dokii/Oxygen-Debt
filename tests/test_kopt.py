@@ -98,6 +98,32 @@ class KoptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output, source.replace(b"  and v4, v0, 1\n", b""))
 
+    def test_constant_branch_prunes_unreachable_cycle_and_effects(self):
+        for condition, targets in ((b"0", b"dead, live"), (b"-1", b"live, dead")):
+            with self.subTest(condition=condition):
+                source = (
+                    b"func test()\r\nentry:\r\n  const v1, " + condition
+                    + b"\r\n  br v1, " + targets + b"\r\ndead: ; note\r\n"
+                    b"  store 0, 42\r\n  jmp cycle\r\ncycle:\r\n  jmp dead\r\n"
+                    b"live:\r\n  ret 7\r\n"
+                )
+                result, output = self.run_kopt(source)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(output, b"func test()\r\nentry:\r\n  jmp live\r\n; note\r\nlive:\r\n  ret 7\r\n")
+
+    def test_pruning_keeps_block_with_another_reachable_predecessor(self):
+        source = (
+            b"func test(v0)\nentry:\n  br v0, chooser, shared\n"
+            b"chooser:\n  br 1, join, shared\nshared:\n  vstore 0, 7\n  br v0, join, join\n"
+            b"join:\n  ret 0\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            output,
+            source.replace(b"br 1, join, shared", b"jmp join").replace(b"br v0, join, join", b"jmp join"),
+        )
+
     def test_redundant_expression_reuses_only_a_current_holder(self):
         source = (
             b"func test(v0, v1)\nentry:\n  mul v2, v0, v1\n  mul v3, v1, v0\n"

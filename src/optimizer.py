@@ -1,4 +1,4 @@
-"""Local simplification and removal of dead, non-trapping instructions."""
+"""Simplify KIR expressions and control flow, then remove dead computations."""
 
 from collections import OrderedDict, deque
 from operator import add, and_, eq, mul, or_, sub, xor
@@ -129,6 +129,12 @@ def simplify_block(instructions, machine, edits, shared_registers, may_spill):
                 args = [args[0], replacement]
             if op == "mov" and args[1][0] == "i":
                 op = "const"
+            if op == "br":
+                condition, when_true, when_false = args
+                if when_true == when_false:
+                    op, args = "jmp", [when_true]
+                elif condition[0] == "i":
+                    op, args = "jmp", [when_true if condition[1] else when_false]
 
         if defines:
             if op in {"const", "mov"}:
@@ -201,11 +207,32 @@ def fuse_block(block, live, edits, fusion):
             consumer = fused
 
 
+def branch_targets(block):
+    return tuple(dict.fromkeys(value for kind, value in block[-1].args if kind == "l"))
+
+
+def remove_unreachable_blocks(blocks, program, edits):
+    entry = program.block_labels[0]
+    reachable = {entry}
+    pending = [entry]
+    while pending:
+        for target in branch_targets(blocks[pending.pop()]):
+            if target not in reachable:
+                reachable.add(target)
+                pending.append(target)
+
+    for label in program.block_labels:
+        if label not in reachable:
+            edits[program.label_lines[label]] = None
+            for instruction in blocks.pop(label):
+                edits[instruction.line] = None
+
+
 def remove_dead_code(blocks, edits, fusion):
     successors = {}
     predecessors = {label: [] for label in blocks}
     for label, block in blocks.items():
-        targets = tuple(dict.fromkeys(value for kind, value in block[-1].args if kind == "l"))
+        targets = branch_targets(block)
         successors[label] = targets
         for target in targets:
             predecessors[target].append(label)
@@ -287,6 +314,7 @@ def optimize(program, source, machine):
         blocks[label] = simplify_block(
             program.instrs[start:end], machine, edits, shared_registers, may_spill,
         )
+    remove_unreachable_blocks(blocks, program, edits)
     fusion = {producer: fused for producer, (fused, latency) in FUSION.items()
               if machine[f"fused_{fused}"] and machine[f"lat_{fused}"] <= machine[latency] + machine["lat_alu"]}
     remove_dead_code(blocks, edits, fusion)
