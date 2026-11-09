@@ -2,28 +2,28 @@
 
 ## What is implemented
 
-Planning is complete. The optimizer implementation starts with the [baseline command](docs/WORKFLOW.md). This file will record shipped behavior as each pass lands.
+The Python CLI parses KIR, validates the requested machine, and runs one block-local constant folding pass. With no folds, it emits the original bytes. The parser, machine loader, and fused-feature validation in `src/kirlib.py` are adapted from the official COMP10 starter kit at commit `d23ac1d`. [Upstream source](https://github.com/rudra-shroff06/LLH-26/blob/d23ac1d865df4cdacf7ad8e9fff3e1d560761c46/Compilers/COMP10/kirlib.py)
 
 ## Pass order
 
-The proposed order is local simplification, reachability, liveness and dead-code removal, then machine-specific passes. Local simplification can reveal constant branches and dead register definitions. [Technical plan](docs/TRD.md)
+The CLI checks the input and machine before folding constants. The pass walks forward so later instructions can use facts learned from earlier definitions. The planned pass order after folding is recorded in the [technical plan](docs/TRD.md).
 
 ## Each pass
 
-The technical plan records the proposed analyses and rewrite conditions. For each shipped pass, add its actual behavior, runtime complexity, and the facts that make its rewrites safe. Keep the references and kit attribution with the relevant pass. [Research references](docs/RESEARCH.md)
+The folding pass tracks known register values from `const`, `mov`, and arithmetic in the current block. It replaces a known `add`, `sub`, or `mul` with the same destination and the precomputed value modulo 2³². It reads operand facts before updating the destination and drops the fact for any unmodeled write. It clears facts at each block entry because another path may reach the block with different values. The pass uses one forward scan and a source rewrite, taking expected linear time and linear space in the input size. [Research references](docs/RESEARCH.md)
 
 ## The machine
 
-The plan is to read the supplied machine settings before choosing fused instructions or estimating the cost of register reuse and scheduling.
+The CLI checks that the original program uses only supported fused operations. It replaces a known multiplication with a constant when `lat_alu` is at most `lat_mul`. The modeled latency comparison is local to the replacement.
 
 ## Keeping the behaviour
 
-Every pass must preserve the ending, the ordered volatile log, and data memory at termination. Use the official validator to test those properties and add focused inputs for hazards the public samples may miss. [Software requirements](docs/SRS.md)
+The replacements compute identical bits in the same destination. Loads, stores, volatile operations, branches, and potentially trapping arithmetic stay in the same order and retain their original operands. The official validator checks the ending, volatile log, and data memory. [Software requirements](docs/SRS.md)
 
 ## Profiles
 
-The baseline will accept an optional profile. If block layout is added, edge counts will guide placement while all control-flow targets stay intact.
+The CLI accepts a profile path. The folding pass needs only the KIR and machine configuration.
 
 ## Known problems
 
-Optimizer correctness and performance have yet to be measured. Current evidence covers the organizer examples only.
+Constants are tracked only inside a block. The first pass lowered cycle count on the wraparound regression case and produced equal cycle counts on the public sample suite. Copy elimination, dead-code removal, instruction scheduling, and register reuse remain planned. Folding can change which registers Kiln touches, so a valid replacement can still affect spill costs in either direction. [Verification and handoff](docs/WORKFLOW.md)

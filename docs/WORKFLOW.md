@@ -14,6 +14,7 @@ For each change, write down the fact that makes the rewrite safe. Add a small te
 
 ## Current handoff
 
-- **State** — Planning complete. Research and the organizers' starter-kit measurements are recorded in [Research](RESEARCH.md). Implementation begins at stage 1.
-- **Next change** — Build the baseline CLI, then add the first constant-folding rule with a 32-bit wraparound regression case.
+- **State** — The baseline CLI and block-local arithmetic folding are implemented. `./build.sh` and the four CLI regression tests pass.
+- **Latest evidence** — The official validator passed 504 comparisons across five selected programs, including a wraparound case that improved from 7 to 4 cycles. All 100 public sample inputs agreed on all five supplied machines, with equal cycle counts in those 500 comparisons. A generated 100,000-instruction case ran in about 0.49 seconds on the development Mac and produced byte-identical output under two Python hash seeds.
+- **Next change** — Propagate copies and simplify arithmetic identities, then add liveness and dead pure code removal. Reuse the current tests for overwritten registers, traps, and block boundaries.
 - **Update before ending a session** — Record the latest verified command or benchmark, any open issue, and the next concrete step. Update [DESIGN.md](../DESIGN.md) for shipped passes and [Decisions](DECISIONS.md) for changed choices.
