@@ -1,0 +1,33 @@
+name: Verify on Ubuntu
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Fetch the pinned organizer kit
+        run: |
+          git init "$RUNNER_TEMP/llh-26"
+          git -C "$RUNNER_TEMP/llh-26" fetch --depth=1 https://github.com/rudra-shroff06/LLH-26.git d23ac1d865df4cdacf7ad8e9fff3e1d560761c46
+          git -C "$RUNNER_TEMP/llh-26" checkout --detach FETCH_HEAD
+      - name: Verify build, CLI, demo, and benchmarks
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          export PATH="/usr/bin:/bin:$PATH"
+          uname -sm
+          python3 --version
+          kit="$RUNNER_TEMP/llh-26/Compilers/COMP10"
+          ./build.sh
+          python3 -m unittest discover -s tests
+          sh tests/demo.sh "$kit"
+          python3 tests/benchmark.py "$kit" --random 64 --seed 832719
