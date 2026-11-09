@@ -1,0 +1,15 @@
+# Software requirements specification
+
+| ID | Requirement | Verification |
+|---|---|---|
+| CLI-01 | After a successful top-level `./build.sh`, `kopt IN.kir --machine MACHINE.cfg [--profile PROFILE.prof] -o OUT.kir` works from any working directory when the executable is invoked by its path. | Build a clean checkout and invoke the executable from another directory. |
+| CLI-02 | On success, exit 0 and write only the requested output file. The optimizer accepts a missing profile and can emit the original program when it finds no improvement. | Exercise both CLI forms and inspect outputs. |
+| SEM-01 | For every input where the original finishes, preserve its return value or exact trap, its ordered volatile log, and final data memory words 0–3071. Preserve the effects that occur before a trap. | Compare with the official validator. Include inputs that produce traps, volatile accesses, and memory changes. |
+| SEM-02 | Follow KIR arithmetic and state rules, including 32-bit wrapping, signed `lt/div/mod`, division toward zero, logical right shift, masked shift amounts, and reads before destination writes. Non-parameter registers start at zero and may be reassigned. | Exercise edge literals, shift counts 31–33, signed division and remainder, and overwritten registers. |
+| SEM-03 | Respect the explicit control-flow edges and memory bounds. Only eliminate a potentially trapping operation when justified under the KIR spec. Profiles influence profitability only. | Exercise joins, loops, unreachable blocks, address boundaries, aliasing, and misleading profiles. |
+| MACH-01 | Read the requested machine configuration. Emit fused operations only when the corresponding feature is enabled. | Check outputs on all supplied machines, including the no-fused configuration. |
+| RUN-01 | Produce byte-identical output for identical inputs. Operate offline with the named inputs and project source files. | Compare repeated runs under different Python hash seeds and review runtime dependencies. |
+| RUN-02 | Finish within 5 seconds for normal programs and 30 seconds for large cases of about 100,000 instructions on the judging system. | Time the command separately on representative normal and large programs. |
+| SUB-01 | Submit top-level `build.sh`, `kopt`, `README.md`, and `DESIGN.md`. The build limit is 10 minutes. Record research sources and reused starter code. Keep starter benchmark, example, and machine directories and build products out of Git. | Review a clean checkout against the official submission checklist. |
+
+The [KIR specification](https://github.com/rudra-shroff06/LLH-26/blob/main/Compilers/COMP10/KIR_SPEC.md) governs semantics and timing. The [submission rules](https://github.com/rudra-shroff06/LLH-26/blob/main/Compilers/COMP10/RULES_AND_SUBMISSION.md) govern the CLI and judging.
