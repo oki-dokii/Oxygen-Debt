@@ -8,8 +8,8 @@ import sys
 # The grader expects the requested output to be the only file we write.
 sys.dont_write_bytecode = True
 
-from src.fold import fold_constants
 from src.kirlib import KirError, check_machine_features, decode_text, load_machine, parse_program
+from src.optimizer import optimize
 
 
 def main():
@@ -26,7 +26,7 @@ def main():
         program = parse_program(source)
         machine = load_machine(args.machine)
         check_machine_features(program, machine)
-        optimized = fold_constants(program, source, machine)
+        optimized = optimize(program, source, machine)
         args.output.write_bytes(original if optimized is None else optimized.encode("utf-8"))
     except (KirError, OSError, ValueError) as error:
         print(f"kopt: {error}", file=sys.stderr)

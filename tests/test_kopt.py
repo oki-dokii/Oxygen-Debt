@@ -44,7 +44,7 @@ class KoptTests(unittest.TestCase):
             b"  sub v2, 0, v1\n  mul v2, v2, v2\n  ret v2\n"
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(b"  const v1, 1\n  const v2, 4294967295\n  const v2, 1\n", output)
+        self.assertEqual(output, b"func test()\nentry:\n  ret 1\n")
 
     def test_unknown_writes_and_block_boundaries_kill_facts(self):
         source = (
@@ -54,10 +54,10 @@ class KoptTests(unittest.TestCase):
         )
         result, output = self.run_kopt(source, extra_args=("--profile", "unused.prof"))
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(output, source)
+        self.assertEqual(output, source.replace(b"  const v1, 10\r\n", b""))
 
     def test_retains_multiplication_if_const_has_higher_latency(self):
-        source = b"func test()\nentry:\n  mul v0, 2, 3\n  ret v0\n"
+        source = b"func test()\nentry:\n  mul v0, 2, 3\n  store 0, v0\n  ret 0\n"
         result, output = self.run_kopt(source, machine=MACHINE.replace("lat_alu = 1", "lat_alu = 3"))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output, source)
@@ -67,3 +67,33 @@ class KoptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn(b"mac", result.stderr)
         self.assertIsNone(output)
+
+    def test_copy_survives_overwrite_of_the_original_register(self):
+        result, output = self.run_kopt(
+            b"func test(v0)\nentry:\n  mov v1, v0\n  vload v0, 1\n"
+            b"  add v2, v1, 0\n  ret v2\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            output,
+            b"func test(v0)\nentry:\n  mov v1, v0\n  vload v0, 1\n  ret v1\n",
+        )
+
+    def test_liveness_handles_both_branch_edges_and_a_backedge(self):
+        source = (
+            b"func test(v0)\nentry:\n  const v1, 0\n  const v3, 7\n  jmp loop\n"
+            b"loop:\n  add v1, v1, 1\n  mul v4, v0, v0\n  lt v2, v1, v0\n"
+            b"  br v2, loop, done\ndone:\n  add v5, v1, v3\n  ret v5\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source.replace(b"  mul v4, v0, v0\n", b""))
+
+    def test_dead_code_keeps_traps_and_effects(self):
+        source = (
+            b"func test(v0)\nentry:\n  store 0, 17\n  vload v1, 0\n"
+            b"  div v2, 5, v0\n  load v3, v0\n  and v4, v0, 1\n  ret 0\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source.replace(b"  and v4, v0, 1\n", b""))

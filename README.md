@@ -2,7 +2,7 @@
 
 Oxygen Debt is our entry for the COMP10 compiler challenge at the Low-Level Hackathon. The goal is to build `kopt`, a Python command that rewrites KIR programs to use fewer simulated Kiln cycles while preserving their behavior.
 
-The first pass folds `add`, `sub`, and `mul` with known operands within a basic block. It reads the supplied machine settings before rewriting a multiplication.
+`kopt` folds constant arithmetic and comparisons, propagates copies, and removes unused computations that cannot trap. It uses the machine settings to decide when to fold a multiplication and when to keep register reads that may avoid spills.
 
 Use Python 3.10 or later. Set `machine.cfg` to the path of a Kiln machine file, such as `machines/machine_default.cfg` from the official kit.
 

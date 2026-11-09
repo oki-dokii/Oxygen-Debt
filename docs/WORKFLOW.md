@@ -14,7 +14,7 @@ For each change, write down the fact that makes the rewrite safe. Add a small te
 
 ## Current handoff
 
-- **State** — The baseline CLI and block-local arithmetic folding are implemented. `./build.sh` and the four CLI regression tests pass.
-- **Latest evidence** — The official validator passed 504 comparisons across five selected programs, including a wraparound case that improved from 7 to 4 cycles. All 100 public sample inputs agreed on all five supplied machines, with equal cycle counts in those 500 comparisons. A generated 100,000-instruction case ran in about 0.49 seconds on the development Mac and produced byte-identical output under two Python hash seeds.
-- **Next change** — Propagate copies and simplify arithmetic identities, then add liveness and dead pure code removal. Reuse the current tests for overwritten registers, traps, and block boundaries.
+- **State** — Local simplification, copy propagation, and liveness-based dead-code removal are implemented. `./build.sh` and seven CLI tests pass.
+- **Latest evidence** — All 500 public sample comparisons agreed across the five machines. Of those, 254 saved cycles and 246 tied. On the default machine, total sample cycles fell from 103,671 to 76,288. The official validator separately passed 1,111 input comparisons across 11 programs. The generated 100,000-instruction case ran in under a second on the development Mac and produced byte-identical output under two Python hash seeds.
+- **Next change** — Make the batch benchmark reproducible from a clean checkout using an external starter kit. Then evaluate common subexpression elimination and machine-dependent fusion against this baseline.
 - **Update before ending a session** — Record the latest verified command or benchmark, any open issue, and the next concrete step. Update [DESIGN.md](../DESIGN.md) for shipped passes and [Decisions](DECISIONS.md) for changed choices.
