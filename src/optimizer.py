@@ -19,6 +19,7 @@ COMMUTATIVE = {"add", "mul", "and", "or", "xor", "eq"}
 PURE = BINARY.keys() | {"const", "mov", "select", "mac", "addsh"}
 PROPAGATE = PURE | {"br", "ret"}
 LIVENESS_BUDGET = 2_000_000
+FUSION = {"mul": ("mac", "lat_mul"), "shl": ("addsh", "lat_alu")}
 
 
 class BlockValues:
@@ -53,11 +54,15 @@ class BlockValues:
 
     def resolve(self, operand, shared_registers):
         value = self.read(operand)
-        if value[0] == "value":
-            if operand[1] in shared_registers:
-                return operand
-            return ("r", next(iter(self.holders[value])))
-        return value
+        if value[0] != "value":
+            return value
+        if operand[1] in shared_registers:
+            return operand
+        return self.representative(value)
+
+    def representative(self, value):
+        holders = self.holders.get(value)
+        return ("r", next(iter(holders))) if holders else None
 
 
 def simplify(op, sources):
@@ -91,19 +96,34 @@ def simplify(op, sources):
     return None
 
 
-def simplify_block(instructions, machine, edits, shared_registers):
+def simplify_block(instructions, machine, edits, shared_registers, may_spill):
     values = BlockValues()
+    expressions = {}
+    last_effect = 0
     block = []
     for original in instructions:
         op = original.op
         args = original.args
         defines = SIGS[op].startswith("d")
+        value = ("value", original.line)
         if op in PROPAGATE:
             args = [values.resolve(arg, shared_registers) if kind == "s" else arg
                     for kind, arg in zip(SIGS[op], args)]
             replacement = simplify(op, args[1:]) if defines else None
-            if op == "mul" and machine["lat_alu"] > machine["lat_mul"]:
+            cheap_copy = op != "mul" or machine["lat_alu"] <= machine["lat_mul"]
+            if not cheap_copy:
                 replacement = None
+            if replacement is None and cheap_copy and (op in BINARY or op == "select"):
+                operands = tuple(values.read(arg) for arg in args[1:])
+                if op in COMMUTATIVE:
+                    operands = tuple(sorted(operands))
+                key = op, operands
+                earlier = expressions.get(key)
+                # A cheap recomputation can beat keeping a temporary live across an effect.
+                if earlier and (not may_spill or op == "mul" or earlier[1] > last_effect):
+                    replacement = values.representative(earlier)
+                if replacement is None:
+                    expressions[key] = value
             if replacement is not None:
                 op = "const" if replacement[0] == "i" else "mov"
                 args = [args[0], replacement]
@@ -111,8 +131,11 @@ def simplify_block(instructions, machine, edits, shared_registers):
                 op = "const"
 
         if defines:
-            value = values.read(args[1]) if op in {"const", "mov"} else ("value", original.line)
+            if op in {"const", "mov"}:
+                value = values.read(args[1])
             values.write(args[0][1], value)
+        if op not in PROPAGATE:
+            last_effect = original.line
         if op == "mov" and args[0] == args[1]:
             edits[original.line] = None
             continue
@@ -125,22 +148,60 @@ def simplify_block(instructions, machine, edits, shared_registers):
     return block
 
 
+def use_instruction(instruction, live):
+    args = instruction.args
+    if SIGS[instruction.op].startswith("d"):
+        live.discard(args[0][1])
+        args = args[1:]
+    live.update(value for kind, value in args if kind == "r")
+
+
 def scan_liveness(block, live, edits=None):
     for instruction in reversed(block):
-        args = instruction.args
-        if SIGS[instruction.op].startswith("d"):
-            dest = args[0][1]
-            if dest not in live and instruction.op in PURE:
-                if edits is not None:
-                    edits[instruction.line] = None
-                continue
-            live.discard(dest)
-            args = args[1:]
-        live.update(value for kind, value in args if kind == "r")
+        if instruction.op in PURE and instruction.args[0][1] not in live:
+            if edits is not None:
+                edits[instruction.line] = None
+            continue
+        use_instruction(instruction, live)
     return live
 
 
-def remove_dead_code(blocks, edits):
+def fuse_pair(producer, consumer, live, fusion):
+    op = fusion.get(producer.op)
+    if op is None or consumer.op != "add":
+        return None
+    temp, left, right = producer.args
+    dest, first, second = consumer.args
+    if temp != dest and temp[1] in live:
+        return None
+    if (first == temp) == (second == temp):
+        return None
+    other = second if first == temp else first
+    if op == "mac":
+        args = [dest, left, right, other]
+    elif right[0] == "i":
+        args = [dest, other, left, ("k", right[1] & 31)]
+    else:
+        return None
+    return Instr(op, args, consumer.line, consumer.text)
+
+
+def fuse_block(block, live, edits, fusion):
+    consumer = block[-1]
+    for producer in reversed(block[:-1]):
+        if producer.line in edits and edits[producer.line] is None:
+            continue
+        fused = fuse_pair(producer, consumer, live, fusion)
+        if fused is None:
+            use_instruction(consumer, live)
+            consumer = producer
+        else:
+            edits[producer.line] = None
+            edits[consumer.line] = fused
+            consumer = fused
+
+
+def remove_dead_code(blocks, edits, fusion):
     successors = {}
     predecessors = {label: [] for label in blocks}
     for label, block in blocks.items():
@@ -180,6 +241,8 @@ def remove_dead_code(blocks, edits):
 
     for label, block in blocks.items():
         scan_liveness(block, live_out(label), edits)
+        if fusion:
+            fuse_block(block, live_out(label), edits, fusion)
 
 
 def render(source, edits):
@@ -214,12 +277,17 @@ def optimize(program, source, machine):
                 registers.add(register)
                 if kind == "s" and read_blocks.setdefault(register, label) != label:
                     shared_registers.add(register)
-    if len(registers) <= machine["registers"]:
+    may_spill = len(registers) > machine["registers"] and machine["reg_spill_penalty"] > 0
+    if not may_spill:
         shared_registers.clear()
 
     starts = [program.labels[label] for label in program.block_labels]
     ends = starts[1:] + [len(program.instrs)]
     for label, start, end in zip(program.block_labels, starts, ends):
-        blocks[label] = simplify_block(program.instrs[start:end], machine, edits, shared_registers)
-    remove_dead_code(blocks, edits)
+        blocks[label] = simplify_block(
+            program.instrs[start:end], machine, edits, shared_registers, may_spill,
+        )
+    fusion = {producer: fused for producer, (fused, latency) in FUSION.items()
+              if machine[f"fused_{fused}"] and machine[f"lat_{fused}"] <= machine[latency] + machine["lat_alu"]}
+    remove_dead_code(blocks, edits, fusion)
     return render(source, edits) if edits else None

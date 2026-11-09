@@ -2,7 +2,7 @@
 
 Oxygen Debt is our entry for the COMP10 compiler challenge at the Low-Level Hackathon. The goal is to build `kopt`, a Python command that rewrites KIR programs to use fewer simulated Kiln cycles while preserving their behavior.
 
-`kopt` folds constant arithmetic and comparisons, propagates copies, and removes unused computations that cannot trap. It uses the machine settings to decide when to fold a multiplication and when to keep register reads that may avoid spills.
+`kopt` folds constants, propagates copies, reuses equivalent computations within a block, and removes unused computations that cannot trap. It can combine a multiply or shift with an addition when the machine supports the fused operation and the temporary is no longer needed.
 
 Use Python 3.10 or later. Set `machine.cfg` to the path of a Kiln machine file, such as `machines/machine_default.cfg` from the official kit.
 
@@ -12,7 +12,15 @@ Use Python 3.10 or later. Set `machine.cfg` to the path of a Kiln machine file, 
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests
 ```
 
-The CLI accepts `--profile profile.prof` for compatibility with the judge's invocation. This pass uses static facts from the program. The [workflow and handoff](docs/WORKFLOW.md) records the next implementation step.
+The CLI accepts `--profile profile.prof` for compatibility with the judge's invocation. The current passes use static facts from the program.
+
+Run the public sample matrix with the organizer's COMP10 directory from a separate checkout. The runner compares behavior before reporting cycle counts. Use `--details` for per-program results or `--optimizer /path/to/kopt` to evaluate another revision.
+
+```sh
+python3 tests/benchmark.py /path/to/LLH-26/Compilers/COMP10 --jobs 4
+```
+
+The [workflow and handoff](docs/WORKFLOW.md) records the latest measured results and next step.
 
 | Document | Use it for |
 |---|---|

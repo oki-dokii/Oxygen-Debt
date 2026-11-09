@@ -97,3 +97,45 @@ class KoptTests(unittest.TestCase):
         result, output = self.run_kopt(source)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output, source.replace(b"  and v4, v0, 1\n", b""))
+
+    def test_redundant_expression_reuses_only_a_current_holder(self):
+        source = (
+            b"func test(v0, v1)\nentry:\n  mul v2, v0, v1\n  mul v3, v1, v0\n"
+            b"  load v2, 0\n  add v4, v2, v3\n  ret v4\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source.replace(b"  mul v3, v1, v0\n", b"  mov v3, v2\n"))
+        overwritten = source.replace(
+            b"  mul v3, v1, v0\n  load v2, 0\n", b"  load v2, 0\n  mul v3, v1, v0\n",
+        )
+        result, output = self.run_kopt(overwritten)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, overwritten.replace(b"  mul v2, v0, v1\n", b""))
+
+    def test_fusion_with_wrapped_shift_and_self_overwrite(self):
+        source = (
+            b"func test(v0, v1)\nentry:\n  shl v0, v0, 35\n"
+            b"  add v0, v0, v1\n  ret v0\n"
+        )
+        machine = MACHINE.replace("fused_addsh = 0", "fused_addsh = 1")
+        result, output = self.run_kopt(source, machine=machine)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, b"func test(v0, v1)\nentry:\n  addsh v0, v1, v0, 3\n  ret v0\n")
+        for ineligible in (MACHINE, machine.replace("lat_addsh = 1", "lat_addsh = 3")):
+            result, output = self.run_kopt(source, machine=ineligible)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(output, source)
+
+    def test_multiply_fusion_preserves_a_live_intermediate(self):
+        source = (
+            b"func test(v0, v1)\nentry:\n  mul v2, v0, v1\n"
+            b"  add v3, v2, v0\n  vstore 0, v2\n  ret v3\n"
+        )
+        machine = MACHINE.replace("fused_mac = 0", "fused_mac = 1")
+        result, output = self.run_kopt(source, machine=machine)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source)
+        result, output = self.run_kopt(source.replace(b"  vstore 0, v2\n", b""), machine=machine)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, b"func test(v0, v1)\nentry:\n  mac v3, v0, v1, v0\n  ret v3\n")

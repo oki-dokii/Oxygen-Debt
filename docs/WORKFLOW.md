@@ -14,7 +14,7 @@ For each change, write down the fact that makes the rewrite safe. Add a small te
 
 ## Current handoff
 
-- **State** — Local simplification, copy propagation, and liveness-based dead-code removal are implemented. `./build.sh` and seven CLI tests pass.
-- **Latest evidence** — All 500 public sample comparisons agreed across the five machines. Of those, 254 saved cycles and 246 tied. On the default machine, total sample cycles fell from 103,671 to 76,288. The official validator separately passed 1,111 input comparisons across 11 programs. The generated 100,000-instruction case ran in under a second on the development Mac and produced byte-identical output under two Python hash seeds.
-- **Next change** — Make the batch benchmark reproducible from a clean checkout using an external starter kit. Then evaluate common subexpression elimination and machine-dependent fusion against this baseline.
+- **State** — Common subexpression elimination and machine-dependent fusion are implemented. The public benchmark runner uses the organizer's kit from a separate checkout. Run `python3 tests/benchmark.py /path/to/LLH-26/Compilers/COMP10 --jobs 4`.
+- **Latest evidence** — All 500 public sample comparisons agreed across five machines. Of those, 295 saved cycles, 202 tied, and three were slower by two to four cycles, all on `paren_depth`. On the default machine, total sample cycles fell from 103,671 to 68,523. The previous optimizer measured 76,288 with the same runner. Ten CLI tests and 2,020 additional official validator comparisons pass. The 100,000-instruction check took about 0.6 seconds on the development Mac and produced identical output under two hash seeds.
+- **Next change** — Fold branches whose conditions are known, then remove unreachable blocks. Use the benchmark runner to evaluate the impact and preserve labels on all reachable paths. Follow up with spill-aware fusion or register reuse based on the traces.
 - **Update before ending a session** — Record the latest verified command or benchmark, any open issue, and the next concrete step. Update [DESIGN.md](../DESIGN.md) for shipped passes and [Decisions](DECISIONS.md) for changed choices.
