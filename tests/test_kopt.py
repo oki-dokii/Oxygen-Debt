@@ -165,3 +165,34 @@ class KoptTests(unittest.TestCase):
         result, output = self.run_kopt(source.replace(b"  vstore 0, v2\n", b""), machine=machine)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output, b"func test(v0, v1)\nentry:\n  mac v3, v0, v1, v0\n  ret v3\n")
+
+    def test_power_of_two_fusion_selects_the_faster_instruction(self):
+        source = (
+            b"func test(v0, v1)\nentry:\n  mul v2, 0x80000000, v0\n"
+            b"  add v3, v1, v2\n  ret v3\n"
+        )
+        machine = MACHINE.replace("fused_mac = 0", "fused_mac = 1").replace(
+            "fused_addsh = 0", "fused_addsh = 1",
+        )
+        result, output = self.run_kopt(source, machine=machine)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, b"func test(v0, v1)\nentry:\n  addsh v3, v1, v0, 31\n  ret v3\n")
+
+        result, output = self.run_kopt(source, machine=machine.replace("lat_addsh = 1", "lat_addsh = 3"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, b"func test(v0, v1)\nentry:\n  mac v3, 2147483648, v0, v1\n  ret v3\n")
+
+    def test_copy_elision_checks_liveness_on_outgoing_edges(self):
+        source = (
+            b"func test(v0, v1, v2, v3, v4)\nentry:\n  add v5, v0, v1\n"
+            b"  mov v0, v5\n  jmp next\nnext:\n  vstore v4, v0\n  ret v0\n"
+        )
+        machine = MACHINE.replace("reg_spill_penalty = 0", "reg_spill_penalty = 5")
+        result, output = self.run_kopt(source, machine=machine)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source.replace(b"add v5, v0, v1\n  mov v0, v5", b"add v0, v0, v1"))
+
+        live_temp = source.replace(b"ret v0", b"ret v5")
+        result, output = self.run_kopt(live_temp, machine=machine)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, live_temp)

@@ -2,11 +2,11 @@
 
 ## What is implemented
 
-The Python CLI parses KIR, validates the requested machine, and runs local simplification, common subexpression elimination, branch folding, unreachable-block removal, dead-code removal, and instruction fusion. With no edits, it emits the original bytes. The parser, machine loader, and fused-feature validation in `src/kirlib.py` are adapted from the official COMP10 starter kit at commit `d23ac1d`. [Upstream source](https://github.com/rudra-shroff06/LLH-26/blob/d23ac1d865df4cdacf7ad8e9fff3e1d560761c46/Compilers/COMP10/kirlib.py)
+The Python CLI parses KIR, validates the requested machine, and runs local simplification, common subexpression elimination, branch folding, unreachable-block removal, dead-code removal, copy elision, and instruction fusion. With no edits, it emits the original bytes. The parser, machine loader, and fused-feature validation in `src/kirlib.py` are adapted from the official COMP10 starter kit at commit `d23ac1d`. [Upstream source](https://github.com/rudra-shroff06/LLH-26/blob/d23ac1d865df4cdacf7ad8e9fff3e1d560761c46/Compilers/COMP10/kirlib.py)
 
 ## Pass order
 
-The CLI checks the input and machine, walks forward to simplify expressions and branches within each block, and removes unreachable blocks. It then runs backward liveness on the remaining edges, which lets it discard definitions used only on removed paths. Fusion runs on retained instructions after liveness converges. [Technical plan](docs/TRD.md)
+The CLI checks the input and machine, walks forward to simplify expressions and branches within each block, and removes unreachable blocks. It then runs backward liveness on the remaining edges, which lets it discard definitions used only on removed paths. Copy elision and fusion run on retained instructions after liveness converges. [Technical plan](docs/TRD.md)
 
 ## Each pass
 
@@ -18,11 +18,11 @@ The CLI checks the input and machine, walks forward to simplify expressions and 
 
 **Dead-code removal.** Compute each block's live-out set from the union of its successors' live-in sets, then scan backward. Drop a pure instruction only if its destination is dead. Revisit predecessors when live-in changes. The cost grows with the total size of blocks and live sets visited. The worklist has a fixed budget of two million work units based on instruction visits, predecessor edges, and live-set entries. If the budget runs out, use dead-code removal only in blocks with no successors, where live-out is known to be empty.
 
-**Instruction fusion.** Scan retained instructions backward with the current live set. Fuse an adjacent `mul` or constant-count `shl` into `add` only when the add reads the temporary once and its old value is dead after the add. The fused instruction reads the producer's original operands before writing the destination, including when the producer reads its own destination. The scan takes expected linear time plus the cost of forming live-out sets. [Research references](docs/RESEARCH.md)
+**Copy elision and instruction fusion.** Scan retained instructions backward with the current live set. A pure computation followed by a copy can write directly to the copy's destination if the temporary is dead after the copy. Fuse an adjacent `mul` or constant-count `shl` into `add` only when the add reads the temporary once and its old value is dead after the add. Multiplication by a power of two is equivalent to a left shift modulo 2³², so that pair can also use `addsh`. Both rewrites read the producer's original operands before writing the final destination, including when the producer reads that register. The scan takes expected linear time plus the cost of forming live-out sets. [Research references](docs/RESEARCH.md)
 
 ## The machine
 
-The CLI checks that the original program uses only supported fused operations. It simplifies a multiplication to a constant or copy when `lat_alu` is at most `lat_mul`. When spills can cost cycles, copy propagation keeps original register operands that are read in multiple blocks. Reuse of cheap expressions stays within uninterrupted spans of pure instructions under the same conditions. Fusion requires machine support and compares the fused latency with the sum of the two original latencies. [Decision log](docs/DECISIONS.md)
+The CLI checks that the original program uses only supported fused operations. It simplifies a multiplication to a constant or copy when `lat_alu` is at most `lat_mul`. When spills can cost cycles, copy propagation keeps original register operands that are read in multiple blocks, copy elision removes intermediate writes, and reuse of cheap expressions stays within uninterrupted spans of pure instructions. Fusion requires machine support and compares the fused latency with the sum of the two original latencies. When both fused forms apply, it chooses `addsh` if it has lower latency. [Decision log](docs/DECISIONS.md)
 
 ## Keeping the behaviour
 
@@ -34,4 +34,4 @@ The CLI accepts a profile path. The current optimizer passes need only the KIR a
 
 ## Known problems
 
-Value tracking stops at block boundaries, so branch folding uses conditions known within a block. Fusion uses local latency and may expose register reload stalls. The public `paren_depth` sample takes two to four additional cycles on three machines after fusion. Scheduling and register reuse remain planned. [Verification and handoff](docs/WORKFLOW.md)
+Value tracking stops at block boundaries, so branch folding uses conditions known within a block. Copy elision reduces register traffic without modeling the complete reload schedule, and fusion still uses local latency. Full register allocation and scheduling remain planned. [Verification and handoff](docs/WORKFLOW.md)

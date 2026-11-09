@@ -19,7 +19,6 @@ COMMUTATIVE = {"add", "mul", "and", "or", "xor", "eq"}
 PURE = BINARY.keys() | {"const", "mov", "select", "mac", "addsh"}
 PROPAGATE = PURE | {"br", "ret"}
 LIVENESS_BUDGET = 2_000_000
-FUSION = {"mul": ("mac", "lat_mul"), "shl": ("addsh", "lat_alu")}
 
 
 class BlockValues:
@@ -172,9 +171,14 @@ def scan_liveness(block, live, edits=None):
     return live
 
 
-def fuse_pair(producer, consumer, live, fusion):
-    op = fusion.get(producer.op)
-    if op is None or consumer.op != "add":
+def combine_pair(producer, consumer, live, machine, may_spill):
+    if consumer.op == "mov" and may_spill and producer.op in PURE:
+        temp = producer.args[0]
+        dest, source = consumer.args
+        if temp == source and temp[1] not in live:
+            return Instr(producer.op, [dest, *producer.args[1:]], consumer.line, consumer.text)
+
+    if producer.op not in {"mul", "shl"} or consumer.op != "add":
         return None
     temp, left, right = producer.args
     dest, first, second = consumer.args
@@ -183,28 +187,42 @@ def fuse_pair(producer, consumer, live, fusion):
     if (first == temp) == (second == temp):
         return None
     other = second if first == temp else first
-    if op == "mac":
-        args = [dest, left, right, other]
-    elif right[0] == "i":
-        args = [dest, other, left, ("k", right[1] & 31)]
-    else:
+    alu_latency = machine["lat_alu"]
+    addsh_latency = machine["lat_addsh"]
+    if producer.op == "shl":
+        if right[0] == "i" and machine["fused_addsh"] and addsh_latency <= 2 * alu_latency:
+            return Instr("addsh", [dest, other, left, ("k", right[1] & 31)], consumer.line, consumer.text)
         return None
-    return Instr(op, args, consumer.line, consumer.text)
+
+    pair_latency = machine["lat_mul"] + alu_latency
+    use_mac = machine["fused_mac"] and machine["lat_mac"] <= pair_latency
+    if machine["fused_addsh"] and addsh_latency <= pair_latency and (
+        not use_mac or addsh_latency < machine["lat_mac"]
+    ):
+        shifted, factor = (right, left) if left[0] == "i" else (left, right)
+        if factor[0] == "i":
+            multiplier = factor[1]
+            if multiplier and (multiplier & (multiplier - 1)) == 0:
+                args = [dest, other, shifted, ("k", multiplier.bit_length() - 1)]
+                return Instr("addsh", args, consumer.line, consumer.text)
+    if use_mac:
+        return Instr("mac", [dest, left, right, other], consumer.line, consumer.text)
+    return None
 
 
-def fuse_block(block, live, edits, fusion):
+def combine_block(block, live, edits, machine, may_spill):
     consumer = block[-1]
     for producer in reversed(block[:-1]):
         if producer.line in edits and edits[producer.line] is None:
             continue
-        fused = fuse_pair(producer, consumer, live, fusion)
-        if fused is None:
+        combined = combine_pair(producer, consumer, live, machine, may_spill)
+        if combined is None:
             use_instruction(consumer, live)
             consumer = producer
         else:
             edits[producer.line] = None
-            edits[consumer.line] = fused
-            consumer = fused
+            edits[consumer.line] = combined
+            consumer = combined
 
 
 def branch_targets(block):
@@ -228,7 +246,7 @@ def remove_unreachable_blocks(blocks, program, edits):
                 edits[instruction.line] = None
 
 
-def remove_dead_code(blocks, edits, fusion):
+def remove_dead_code(blocks, edits, machine, may_spill):
     successors = {}
     predecessors = {label: [] for label in blocks}
     for label, block in blocks.items():
@@ -268,8 +286,8 @@ def remove_dead_code(blocks, edits, fusion):
 
     for label, block in blocks.items():
         scan_liveness(block, live_out(label), edits)
-        if fusion:
-            fuse_block(block, live_out(label), edits, fusion)
+        if may_spill or machine["fused_mac"] or machine["fused_addsh"]:
+            combine_block(block, live_out(label), edits, machine, may_spill)
 
 
 def render(source, edits):
@@ -315,7 +333,5 @@ def optimize(program, source, machine):
             program.instrs[start:end], machine, edits, shared_registers, may_spill,
         )
     remove_unreachable_blocks(blocks, program, edits)
-    fusion = {producer: fused for producer, (fused, latency) in FUSION.items()
-              if machine[f"fused_{fused}"] and machine[f"lat_{fused}"] <= machine[latency] + machine["lat_alu"]}
-    remove_dead_code(blocks, edits, fusion)
+    remove_dead_code(blocks, edits, machine, may_spill)
     return render(source, edits) if edits else None
