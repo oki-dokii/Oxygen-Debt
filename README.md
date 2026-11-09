@@ -12,7 +12,7 @@ Use Python 3.10 or later. Set `machine.cfg` to the path of a Kiln machine file, 
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests
 ```
 
-The CLI accepts `--profile profile.prof` for compatibility with the judge's invocation. The current passes use static facts from the program.
+The optional `--profile profile.prof` supplies edge counts for block layout. The optimizer uses them to estimate timing while keeping the entry block first and preserving explicit branch targets.
 
 Run the public sample matrix with the organizer's COMP10 directory from a separate checkout. The runner compares behavior before reporting cycle counts. Use `--details` for per-program results or `--optimizer /path/to/kopt` to evaluate another revision.
 

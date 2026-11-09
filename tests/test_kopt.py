@@ -25,11 +25,14 @@ fused_addsh = 0
 
 
 class KoptTests(unittest.TestCase):
-    def run_kopt(self, source, machine=MACHINE, extra_args=()):
+    def run_kopt(self, source, machine=MACHINE, extra_args=(), profile=None):
         with tempfile.TemporaryDirectory() as directory:
             work = Path(directory)
             (work / "in.kir").write_bytes(source)
             (work / "machine.cfg").write_text(machine, encoding="utf-8")
+            if profile is not None:
+                (work / "branch.prof").write_text(profile, encoding="utf-8")
+                extra_args = (*extra_args, "--profile", "branch.prof")
             result = subprocess.run(
                 [KOPT, "in.kir", "--machine", "machine.cfg", *extra_args, "-o", "out.kir"],
                 cwd=work,
@@ -145,6 +148,27 @@ class KoptTests(unittest.TestCase):
             output,
             b"func test(v0)\nentry:\n  jmp dispatch\ndispatch:\n  jmp tail\ntail:\n  ret 7\n",
         )
+
+    def test_profile_moves_hot_successor_and_preserves_both_targets(self):
+        source = b"; header\nfunc test(v0)\nentry:\n  br v0, hot, cold\ncold:\n  ret 0\nhot:\n  ret 7"
+        profile = "edge entry hot 100\nedge entry cold 1\nedge cold hot 9999\nedge entry hot bogus\n"
+        machine = MACHINE.replace("taken_branch_penalty = 0", "taken_branch_penalty = 2")
+        result, output = self.run_kopt(source, machine=machine, profile=profile)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            output,
+            b"; header\nfunc test(v0)\nentry:\n  br v0, hot, cold\nhot:\n  ret 7\ncold:\n  ret 0\n",
+        )
+
+    def test_layout_keeps_hot_loop_in_cache(self):
+        source = b"func test(v0)\nentry:\n  br v0, done, loop\nloop:\n  jmp loop\ndone:\n  ret 7\n"
+        profile = "edge entry done 10\nedge loop loop 100\n"
+        machine = MACHINE.replace("taken_branch_penalty = 0", "taken_branch_penalty = 2")
+        machine = machine.replace("icache_size = 64", "icache_size = 2")
+        machine = machine.replace("icache_penalty = 0", "icache_penalty = 2")
+        result, output = self.run_kopt(source, machine=machine, profile=profile)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source)
 
     def test_redundant_expression_reuses_only_a_current_holder(self):
         source = (

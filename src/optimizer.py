@@ -4,6 +4,7 @@ from collections import OrderedDict, deque
 from operator import add, and_, eq, mul, or_, sub, xor
 
 from .kirlib import MASK, SIGS, Instr
+from .layout import choose_layout
 
 
 BINARY = {
@@ -328,7 +329,7 @@ def remove_dead_code(blocks, edits, machine, may_spill):
             combine_block(block, live_out(label), edits, machine, may_spill)
 
 
-def render(source, edits):
+def render(source, edits, layout=None, label_lines=None):
     lines = source.splitlines(keepends=True)
     for number, replacement in edits.items():
         index = number - 1
@@ -344,10 +345,21 @@ def render(source, edits):
                          for kind, value in replacement.args)
         suffix = f" ;{comment}" if separator else ""
         lines[index] = f"{indent}{replacement.op} {args}{suffix}{ending}"
-    return "".join(lines)
+    if layout is None:
+        return "".join(lines)
+
+    starts = sorted((label_lines[label] - 1, label) for label in layout)
+    ends = [start for start, _ in starts[1:]] + [len(lines)]
+    chunks = {label: "".join(lines[start:end]) for (start, label), end in zip(starts, ends)}
+    parts = lines[:starts[0][0]]
+    for label in layout[:-1]:
+        chunk = chunks[label]
+        parts.append(chunk if chunk.endswith(("\n", "\r")) else chunk + "\n")
+    parts.append(chunks[layout[-1]])
+    return "".join(parts)
 
 
-def optimize(program, source, machine):
+def optimize(program, source, machine, profile=None):
     edits = {}
     blocks = {}
     registers = set(program.params)
@@ -373,4 +385,5 @@ def optimize(program, source, machine):
     thread_jumps(blocks, edits)
     remove_unreachable_blocks(blocks, program, edits)
     remove_dead_code(blocks, edits, machine, may_spill)
-    return render(source, edits) if edits else None
+    layout = choose_layout(blocks, edits, machine, profile)
+    return render(source, edits, layout, program.label_lines) if edits or layout else None

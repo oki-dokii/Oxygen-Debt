@@ -2,11 +2,11 @@
 
 ## What is implemented
 
-The Python CLI parses KIR, validates the requested machine, and runs local simplification, common subexpression elimination, branch folding, jump threading, unreachable-block removal, dead-code removal, copy elision, and instruction fusion. With no edits, it emits the original bytes. The parser, machine loader, and fused-feature validation in `src/kirlib.py` are adapted from the official COMP10 starter kit at commit `d23ac1d`. [Upstream source](https://github.com/rudra-shroff06/LLH-26/blob/d23ac1d865df4cdacf7ad8e9fff3e1d560761c46/Compilers/COMP10/kirlib.py)
+The Python CLI parses KIR, validates the requested machine, and runs local simplification, common subexpression elimination, branch folding, jump threading, unreachable-block removal, dead-code removal, copy elision, and instruction fusion. A supplied profile can guide block layout. With no edits, the CLI emits the original bytes. The parser, machine loader, and fused-feature validation in `src/kirlib.py` are adapted from the official COMP10 starter kit at commit `d23ac1d`. [Upstream source](https://github.com/rudra-shroff06/LLH-26/blob/d23ac1d865df4cdacf7ad8e9fff3e1d560761c46/Compilers/COMP10/kirlib.py)
 
 ## Pass order
 
-The CLI checks the input and machine, walks forward to simplify expressions and branches within each block, threads jumps, and removes unreachable blocks. It then runs backward liveness on the remaining edges, which lets it discard definitions used only on removed paths. Copy elision and fusion run on retained instructions after liveness converges. [Technical plan](docs/TRD.md)
+The CLI checks the input and machine, walks forward to simplify expressions and branches within each block, threads jumps, and removes unreachable blocks. It then runs backward liveness on the remaining edges, which lets it discard definitions used only on removed paths. Copy elision and fusion run on retained instructions after liveness converges. Layout runs last so its cache estimate uses the final instruction counts. [Technical plan](docs/TRD.md)
 
 ## Each pass
 
@@ -20,6 +20,8 @@ The CLI checks the input and machine, walks forward to simplify expressions and 
 
 **Copy elision and instruction fusion.** Scan retained instructions backward with the current live set. A pure computation followed by a copy can write directly to the copy's destination if the temporary is dead after the copy. Fuse an adjacent `mul` or constant-count `shl` into `add` only when the add reads the temporary once and its old value is dead after the add. Multiplication by a power of two is equivalent to a left shift modulo 2³², so that pair can also use `addsh`. Both rewrites read the producer's original operands before writing the final destination, including when the producer reads that register. The scan takes expected linear time plus the cost of forming live-out sets. [Research references](docs/RESEARCH.md)
 
+**Block layout.** Sort surviving edges by profile weight and join chains at their tails and heads, keeping the entry first. Compare the proposed order with the current one using estimated taken-branch and instruction-cache penalties. Sorting costs O(E log E) for E candidate edges, and scoring scans the retained blocks and instructions. Moving labeled blocks preserves every explicit transfer. [Profile-guided code positioning](https://doi.org/10.1145/93542.93550)
+
 ## The machine
 
 The CLI checks that the original program uses only supported fused operations. It simplifies a multiplication to a constant or copy when `lat_alu` is at most `lat_mul`. When spills can cost cycles, copy propagation keeps original register operands that are read in multiple blocks, copy elision removes intermediate writes, and reuse of cheap expressions stays within uninterrupted spans of pure instructions. Fusion requires machine support and compares the fused latency with the sum of the two original latencies. When both fused forms apply, it chooses `addsh` if it has lower latency. [Decision log](docs/DECISIONS.md)
@@ -30,8 +32,8 @@ The replacements compute identical bits in the same destination or use a registe
 
 ## Profiles
 
-The CLI accepts a profile path. The current optimizer passes need only the KIR and machine configuration. The benchmark runner forwards sample profiles when supplied by the organizer.
+Only layout uses profile counts. It ignores malformed entries and counts for edges absent from the optimized graph. It gives existing fallthrough edges a small bias to retain them when counts are close or missing. Block visit estimates use the larger of incoming and outgoing observed counts. A missing or unreadable profile leaves layout in source order. An inaccurate profile can change the layout and cycle count while leaving execution behavior intact.
 
 ## Known problems
 
-Value tracking stops at block boundaries, so branch folding uses conditions known within a block. Jump threading runs before liveness and can miss blocks made jump-only by dead-code removal. Redirecting a branch may also change whether its target immediately follows it in layout. Copy elision reduces register traffic without modeling the complete reload schedule, and fusion still uses local latency. Full register allocation and scheduling remain planned. [Verification and handoff](docs/WORKFLOW.md)
+Value tracking stops at block boundaries, so branch folding uses conditions known within a block. Jump threading runs before liveness and can miss blocks made jump-only by dead-code removal. The layout estimate treats branch and cache penalties as additive and cannot account for overlap with register reloads or inaccurate counts. The few-register machine's supplied-profile sample total rose by 77 cycles. Full register allocation and scheduling remain planned. [Verification and handoff](docs/WORKFLOW.md)
