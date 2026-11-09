@@ -20,6 +20,14 @@ Run the public sample matrix with the organizer's COMP10 directory from a separa
 python3 tests/benchmark.py /path/to/LLH-26/Compilers/COMP10 --jobs 4
 ```
 
+Replay the demo with the same external kit. It shows `sum_sq` on machines with and without fusion, then verifies the memory written before a division-by-zero trap.
+
+```sh
+sh tests/demo.sh /path/to/LLH-26/Compilers/COMP10
+```
+
+For the release validation run, add `--random 64 --seed 832719` to the benchmark command. Generated inputs are used for correctness checks. The reported cycle counts use the supplied sample inputs.
+
 The [workflow and handoff](docs/WORKFLOW.md) records the latest measured results and next step.
 
 | Document | Use it for |

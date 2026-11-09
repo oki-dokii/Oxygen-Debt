@@ -17,9 +17,27 @@ class Sample:
     seconds: float
     before: int | None
     after: int | None
+    generated_passed: int
+    generated_skipped: int
 
 
-def compare(kir, optimizer, program, machine, output):
+def check_generated(kir, original, optimized, count, seed):
+    passed = skipped = 0
+    for index, inputs in enumerate(kir.generate_inputs(original.nparams, count, seed), 1):
+        args = inputs.args, inputs.segments, inputs.vin
+        before = kir.execute(original, *args, 200_000)
+        if before.status == "TIMEOUT":
+            skipped += 1
+            continue
+        after = kir.execute(optimized, *args, 20 * before.steps + 1000)
+        difference = kir.first_difference(before, after)
+        if difference:
+            raise RuntimeError(f"generated input {index}, seed {seed}: {difference}\n{kir.format_input(inputs)}")
+        passed += 1
+    return passed, skipped
+
+
+def compare(kir, optimizer, program, machine, output, random_count, seed):
     try:
         original = kir.load_program(program)
         config = kir.load_machine(machine)
@@ -41,11 +59,12 @@ def compare(kir, optimizer, program, machine, output):
         if len(original.params) != len(optimized.params):
             raise RuntimeError("optimizer changed the number of parameters")
         before, after = map(kir.compile_program, (original, optimized))
+        passed, skipped = check_generated(kir, before, after, random_count, seed)
         before_run = kir.execute(
             before, inputs.args, inputs.segments, inputs.vin, kir.DEFAULT_MAX_STEPS, want_trace=True,
         )
         if before_run.status == "TIMEOUT":
-            return Sample(program.stem, machine.stem, seconds, None, None)
+            return Sample(program.stem, machine.stem, seconds, None, None, passed, skipped)
         after_run = kir.execute(
             after, inputs.args, inputs.segments, inputs.vin, 20 * before_run.steps + 1000, want_trace=True,
         )
@@ -56,6 +75,7 @@ def compare(kir, optimizer, program, machine, output):
             program.stem, machine.stem, seconds,
             kir.time_trace(before, before_run.trace, config),
             kir.time_trace(after, after_run.trace, config),
+            passed, skipped,
         )
     except (OSError, RuntimeError, subprocess.TimeoutExpired, kir.KirError) as error:
         raise RuntimeError(f"{machine.stem}/{program.stem}: {error}") from error
@@ -86,6 +106,10 @@ def print_results(rows, machines, details):
             if details or row.after > row.before:
                 print(f"  {row.program}: {row.before:,} -> {row.after:,}")
     print(f"{len(rows)} samples, max kopt wall time {max(row.seconds for row in rows):.3f}s")
+    passed = sum(row.generated_passed for row in rows)
+    skipped = sum(row.generated_skipped for row in rows)
+    if passed or skipped:
+        print(f"{passed:,} generated comparisons passed, {skipped:,} originals timed out")
 
 
 def main():
@@ -95,10 +119,14 @@ def main():
     parser.add_argument("--program", action="append", default=[], help="limit to this program stem")
     parser.add_argument("--machine", action="append", default=[], help="limit to this machine stem")
     parser.add_argument("--jobs", type=int, default=1, help="number of simultaneous samples")
+    parser.add_argument("--random", type=int, default=0, help="additional generated inputs per sample")
+    parser.add_argument("--seed", type=int, default=12345, help="seed for generated inputs")
     parser.add_argument("--details", action="store_true", help="print cycle counts for every sample")
     args = parser.parse_args()
     if args.jobs < 1:
         parser.error("--jobs must be positive")
+    if args.random < 0:
+        parser.error("--random must be nonnegative")
     kit = args.kit.resolve()
     if not (kit / "kirlib.py").is_file():
         parser.error(f"No official kirlib.py in {kit}")
@@ -115,7 +143,10 @@ def main():
             output_dir = Path(directory)
             with ThreadPoolExecutor(max_workers=args.jobs) as pool:
                 pending = [
-                    pool.submit(compare, kir, optimizer, program, machine, output_dir / f"{i}.kir")
+                    pool.submit(
+                        compare, kir, optimizer, program, machine, output_dir / f"{i}.kir",
+                        args.random, args.seed,
+                    )
                     for i, (program, machine) in enumerate(
                         (program, machine) for machine in machines for program in programs
                     )
