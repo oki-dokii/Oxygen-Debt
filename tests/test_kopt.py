@@ -49,7 +49,7 @@ class KoptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output, b"func test()\nentry:\n  ret 1\n")
 
-    def test_unknown_writes_and_block_boundaries_kill_facts(self):
+    def test_unknown_writes_kill_values_while_constants_cross_blocks(self):
         source = (
             b"func test(v0)\r\nentry:\r\n  const v1, 10\r\n  load v1, v0\r\n"
             b"  add v2, v1, 3\r\n  const v3, 9\r\n  jmp finish\r\n"
@@ -57,7 +57,43 @@ class KoptTests(unittest.TestCase):
         )
         result, output = self.run_kopt(source, extra_args=("--profile", "unused.prof"))
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(output, source.replace(b"  const v1, 10\r\n", b""))
+        self.assertEqual(
+            output,
+            source.replace(b"  const v1, 10\r\n", b"").replace(b"  const v3, 9\r\n", b"")
+            .replace(b"  add v4, v3, 2\r\n", b"  const v4, 11\r\n"),
+        )
+
+    def test_constant_at_join_requires_incoming_paths_to_agree(self):
+        source = (
+            b"func test(v0)\nentry:\n  br v0, left, right\n"
+            b"left:\n  mul v1, 3, 3\n  vstore 1, v0\n  jmp join\n"
+            b"right:\n  const v1, 9\n  vstore 2, v0\n  jmp join\n"
+            b"join:\n  sub v2, v1, 9\n  br v2, fault, done\n"
+            b"fault:\n  trap 7\ndone:\n  ret v1\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            output,
+            b"func test(v0)\nentry:\n  br v0, left, right\n"
+            b"left:\n  vstore 1, v0\n  ret 9\nright:\n  vstore 2, v0\n"
+            b"  jmp join\njoin:\n  ret 9\n",
+        )
+
+        mixed = source.replace(b"  const v1, 9", b"  const v1, 8")
+        result, output = self.run_kopt(mixed)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, mixed.replace(b"  mul v1, 3, 3", b"  const v1, 9"))
+
+    def test_constant_on_first_iteration_does_not_hide_loop_exit(self):
+        source = (
+            b"func test()\nentry:\n  const v1, 0\n  jmp head\n"
+            b"head:\n  br v1, done, body\nbody:\n  const v1, 1\n"
+            b"  vstore 4, v1\n  jmp head\ndone:\n  ret v1\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source)
 
     def test_retains_multiplication_if_const_has_higher_latency(self):
         source = b"func test()\nentry:\n  mul v0, 2, 3\n  store 0, v0\n  ret 0\n"
@@ -183,7 +219,11 @@ class KoptTests(unittest.TestCase):
         )
         result, output = self.run_kopt(source)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(output, source.replace(b"  mul v4, v0, v0\n", b""))
+        self.assertEqual(
+            output,
+            source.replace(b"  mul v4, v0, v0\n", b"").replace(b"  const v3, 7\n", b"")
+            .replace(b"  add v5, v1, v3\n", b"  add v5, v1, 7\n"),
+        )
 
     def test_dead_code_keeps_traps_and_effects(self):
         source = (

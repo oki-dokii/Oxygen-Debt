@@ -1,8 +1,8 @@
 """Simplify KIR expressions and control flow, then remove dead computations."""
 
 from collections import Counter, OrderedDict, deque
-from operator import add, and_, eq, mul, or_, sub, xor
 
+from .arithmetic import BINARY, COMMUTATIVE, simplify
 from .kirlib import MASK, SIGS, Instr
 from .layout import choose_layout
 from .loops import double_loops, hoist_loops
@@ -11,16 +11,6 @@ from .ranges import entry_intervals, interval, reduce_division, update as update
 from .registers import compact_registers
 
 
-BINARY = {
-    "add": add, "sub": sub, "mul": mul, "and": and_, "or": or_, "xor": xor,
-    "eq": eq, "lt": lambda a, b: (a ^ 0x80000000) < (b ^ 0x80000000),
-    "shl": lambda a, b: a << (b & 31), "shr": lambda a, b: a >> (b & 31),
-}
-RIGHT_IDENTITY = {
-    "add": 0, "sub": 0, "mul": 1, "and": MASK, "or": 0, "xor": 0,
-    "shl": 0, "shr": 0,
-}
-COMMUTATIVE = {"add", "mul", "and", "or", "xor", "eq"}
 PURE = BINARY.keys() | {"const", "mov", "select", "mac", "addsh"}
 PROPAGATE = PURE | {"br", "ret"}
 LIVENESS_BUDGET = 2_000_000
@@ -69,39 +59,12 @@ class BlockValues:
         return ("r", next(iter(holders))) if holders else None
 
 
-def simplify(op, sources):
-    if op == "select":
-        cond, yes, no = sources
-        if yes == no:
-            return yes
-        if cond[0] == "i":
-            return yes if cond[1] else no
-    if op not in BINARY:
-        return None
-
-    left, right = sources
-    if left[0] == right[0] == "i":
-        return ("i", int(BINARY[op](left[1], right[1])) & MASK)
-    if left == right:
-        if op in {"sub", "xor", "lt", "eq"}:
-            return ("i", int(op == "eq"))
-        if op in {"and", "or"}:
-            return left
-    if op in COMMUTATIVE and left[0] == "i":
-        left, right = right, left
-    if right[0] == "i":
-        literal = right[1]
-        if op in {"shl", "shr"}:
-            literal &= 31
-        if literal == RIGHT_IDENTITY.get(op):
-            return left
-        if (op in {"mul", "and"} and literal == 0) or (op == "or" and literal == MASK):
-            return right
-    return None
-
-
 def simplify_block(instructions, machine, edits, shared_registers, may_spill, intervals, safe_memory):
     values = BlockValues()
+    if intervals:
+        for register, (low, high) in intervals.items():
+            if low == high:
+                values.write(register, ("i", low & MASK))
     expressions = {}
     negated_tests = {}
     literal_memory = {}
@@ -514,7 +477,7 @@ def optimize(program, source, machine, profile=None):
     range_ops = {"load", "store"}
     if machine["lat_alu"] <= machine["lat_div"]:
         range_ops.update(("div", "mod"))
-    use_intervals = any(instruction.op in range_ops for instruction in program.instrs)
+    use_intervals = len(blocks) > 1 or any(instruction.op in range_ops for instruction in program.instrs)
     intervals = entry_intervals(blocks) if use_intervals else {}
     safe_memory = {}
     for label, block in blocks.items():

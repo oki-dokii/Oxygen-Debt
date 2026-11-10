@@ -2,6 +2,7 @@
 
 from collections import deque
 
+from .arithmetic import BINARY, simplify
 from .kirlib import MASK, SIGS
 
 MIN, MAX = -(1 << 31), (1 << 31) - 1
@@ -32,6 +33,14 @@ def record(facts, operand, bounds):
 def result_interval(facts, op, sources):
     if op in {"const", "mov"}:
         return interval(facts, sources[0])
+    if op in BINARY or op == "select":
+        operands = []
+        for source in sources:
+            low, high = interval(facts, source)
+            operands.append(("i", low & MASK) if low == high else source)
+        folded = simplify(op, operands)
+        if folded is not None:
+            return interval(facts, folded)
     if op in {"lt", "eq"}:
         return 0, 1
     if op == "select":
@@ -106,8 +115,17 @@ def entry_intervals(blocks):
         for instruction in block:
             update(facts, instruction.op, instruction.args)
         comparison = comparison_edges(block, facts)
-        targets = (value for kind, value in block[-1].args if kind == "l")
+        terminator = block[-1]
+        known_edge = None
+        if terminator.op == "br":
+            low, high = interval(facts, terminator.args[0])
+            if low == high:
+                # A later visit can open the other edge if the incoming range grows.
+                known_edge = 0 if low else 1
+        targets = (value for kind, value in terminator.args if kind == "l")
         for index, target in enumerate(targets):
+            if known_edge is not None and index != known_edge:
+                continue
             outgoing = facts
             if comparison:
                 operands, alternatives = comparison

@@ -16,7 +16,7 @@ flowchart LR
 
 | Pass | Initial approach | Safety condition |
 |---|---|---|
-| Constants and copies | Walk forward within each block. Track literals and current value identities. Read all source facts before changing the destination. | Resolve a copy only while a register still holds the copied value. Apply KIR's numeric rules. Start with unknown values at block boundaries. |
+| Constants and copies | Seed each block with exact facts from range analysis. Walk forward within each block to track literals and current value identities. | Keep an entry constant only when the reachable incoming paths agree. Read all source facts before changing the destination and resolve copies only while their values are held. |
 | Redundant arithmetic | Key pure expressions by opcode and the current operand values. Canonicalize operand order only for commutative operations. | Reuse an earlier result only while it remains available in a register. Begin with arithmetic and comparisons. |
 | Load reuse | Track reads and writes by address value within a block. Discard facts a store could overwrite. | An earlier access to the same address must have succeeded on every path that reaches the replacement. The recorded value must still be available. |
 | Memory cleanup | Use signed ranges to prove addresses are in bounds. Drop unused loads and match overwritten stores within trap-free continuations. | Require addresses in 0 through 4095. Stop store matching at reads or volatile operations and preserve the store sequence on any trapping path. |
