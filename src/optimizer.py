@@ -5,6 +5,7 @@ from operator import add, and_, eq, mul, or_, sub, xor
 
 from .kirlib import MASK, SIGS, Instr
 from .layout import choose_layout
+from .ranges import entry_intervals, reduce_division, update as update_interval
 from .registers import compact_registers
 
 
@@ -97,7 +98,7 @@ def simplify(op, sources):
     return None
 
 
-def simplify_block(instructions, machine, edits, shared_registers, may_spill):
+def simplify_block(instructions, machine, edits, shared_registers, may_spill, intervals=None):
     values = BlockValues()
     expressions = {}
     literal_memory = {}
@@ -111,6 +112,10 @@ def simplify_block(instructions, machine, edits, shared_registers, may_spill):
         args = original.args
         defines = SIGS[op].startswith("d")
         value = ("value", original.line)
+        if intervals is not None and op in {"div", "mod"}:
+            reduced = reduce_division(op, args, intervals)
+            if reduced is not None:
+                op, args = reduced
         if op in PROPAGATE:
             args = [values.resolve(arg, shared_registers) if kind == "s" else arg
                     for kind, arg in zip(SIGS[op], args)]
@@ -167,6 +172,8 @@ def simplify_block(instructions, machine, edits, shared_registers, may_spill):
                     memory[address] = value
 
         if defines:
+            if intervals is not None:
+                update_interval(intervals, op, args)
             if op in {"const", "mov"}:
                 value = values.read(args[1])
             values.write(args[0][1], value)
@@ -392,7 +399,6 @@ def render(source, edits, layout=None, label_lines=None):
 
 def optimize(program, source, machine, profile=None):
     edits = {}
-    blocks = {}
     registers = set(program.params)
     read_blocks = {}
     shared_registers = set()
@@ -409,10 +415,17 @@ def optimize(program, source, machine, profile=None):
 
     starts = [program.labels[label] for label in program.block_labels]
     ends = starts[1:] + [len(program.instrs)]
-    for label, start, end in zip(program.block_labels, starts, ends):
-        blocks[label] = simplify_block(
-            program.instrs[start:end], machine, edits, shared_registers, may_spill,
-        )
+    blocks = {
+        label: program.instrs[start:end]
+        for label, start, end in zip(program.block_labels, starts, ends)
+    }
+    use_intervals = machine["lat_alu"] <= machine["lat_div"] and any(
+        instruction.op in {"div", "mod"} for instruction in program.instrs
+    )
+    intervals = entry_intervals(blocks) if use_intervals else {}
+    for label, block in blocks.items():
+        facts = intervals.get(label, {}).copy() if use_intervals else None
+        blocks[label] = simplify_block(block, machine, edits, shared_registers, may_spill, facts)
     thread_jumps(blocks, edits)
     remove_unreachable_blocks(blocks, program, edits)
     live_in = remove_dead_code(blocks, edits, machine, may_spill)

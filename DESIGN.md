@@ -2,11 +2,11 @@
 
 ## What is implemented
 
-The Python CLI parses KIR, validates the requested machine, and runs local simplification, common subexpression elimination, load reuse, branch folding, jump threading, unreachable-block removal, dead-code removal, copy elision, instruction fusion, and register reuse. A supplied profile can guide block layout. With no edits, the CLI emits the original bytes. The parser, machine loader, and fused-feature validation in `src/kirlib.py` are adapted from the official COMP10 starter kit at commit `d23ac1d`. [Upstream source](https://github.com/rudra-shroff06/LLH-26/blob/d23ac1d865df4cdacf7ad8e9fff3e1d560761c46/Compilers/COMP10/kirlib.py)
+The Python CLI parses KIR, validates the requested machine, and runs local simplification, common subexpression elimination, load reuse, signed division simplification, branch folding, jump threading, unreachable-block removal, dead-code removal, copy elision, instruction fusion, and register reuse. A supplied profile can guide block layout. With no edits, the CLI emits the original bytes. The parser, machine loader, and fused-feature validation in `src/kirlib.py` are adapted from the official COMP10 starter kit at commit `d23ac1d`. [Upstream source](https://github.com/rudra-shroff06/LLH-26/blob/d23ac1d865df4cdacf7ad8e9fff3e1d560761c46/Compilers/COMP10/kirlib.py)
 
 ## Pass order
 
-The CLI checks the input and machine, walks forward to simplify expressions and branches within each block, threads jumps, and removes unreachable blocks. It then runs backward liveness on the remaining edges, which lets it discard definitions used only on removed paths. Copy elision and fusion run on retained instructions after liveness converges. Register reuse then renames local values, and layout runs last using the final instruction counts. [Technical plan](docs/TRD.md)
+The CLI checks the input and machine, computes signed entry ranges when division or remainder can use them, then walks forward to simplify each block. It threads jumps and removes unreachable blocks before running backward liveness on the remaining edges. Copy elision and fusion run on retained instructions after liveness converges. Register reuse then renames local values, and layout runs last using the final instruction counts. [Technical plan](docs/TRD.md)
 
 ## Each pass
 
@@ -15,6 +15,8 @@ The CLI checks the input and machine, walks forward to simplify expressions and 
 **Common subexpression elimination.** Key pure arithmetic, comparisons, and selects by their opcode and operand values. Normalize operand order for commutative operations. Reuse an expression only while a register still holds its result. Table lookups take expected constant time per instruction.
 
 **Load reuse.** Record the value read or written at each address within a block. A store to a literal address invalidates facts for all dynamic addresses and updates its own slot. A dynamic store invalidates both tables before recording its value. Reuse a literal or a register that still holds the recorded value. Reaching the second access proves that the earlier access to that address succeeded, so the removed load cannot introduce a new trap. The two tables take linear total work to maintain because each cleared entry must first have been inserted.
+
+**Signed division and remainder.** Propagate signed lower and upper bounds through the control-flow graph. Join incoming ranges by taking their enclosing interval. A signed less-than immediately feeding a branch narrows the two operands along each edge, provided the comparison preserves both operands. Add and subtract yield an unknown range when they can wrap. Expanding bounds on repeated backward edges widen toward the signed limits. A budget of 500,000 work units bounds the propagation and falls back to facts within each block. Fold exact operands, simplify divisors of magnitude one, and use shifts or masks for proven nonnegative dividends and suitable powers of two. Every rewrite requires an exact nonzero divisor.
 
 **Control flow.** Replace a branch with a jump if its condition is known within the block or both targets are identical. Resolve each chain of jump-only blocks to its endpoint, caching the result for every hop. Paths that enter a jump cycle keep their original edges. Redirect branches and jumps to resolved endpoints, then follow the resulting edges from the original entry and delete unvisited labels and instructions. The walks are iterative and take linear time in the number of blocks and edges, plus the time to mark removed instructions.
 
@@ -40,4 +42,4 @@ Only layout uses profile counts. It ignores malformed entries and counts for edg
 
 ## Known problems
 
-Value tracking stops at block boundaries, so branch folding uses conditions known within a block. Jump threading runs before liveness and can miss blocks made jump-only by dead-code removal. The layout estimate treats branch and cache penalties as additive and cannot account for overlap with register reloads or inaccurate counts. The register reuse guard uses reload counts from one- and two-block cycles as a proxy for timing. [Verification and handoff](docs/WORKFLOW.md)
+Branch folding uses conditions known within a block. The signed range analysis recognizes direct less-than branches and loses precision at merges and on operations that may wrap. Jump threading runs before liveness and can miss blocks made jump-only by dead-code removal. The layout estimate treats branch and cache penalties as additive and cannot account for overlap with register reloads or inaccurate counts. The register reuse guard uses reload counts from one- and two-block cycles as a proxy for timing. [Verification and handoff](docs/WORKFLOW.md)

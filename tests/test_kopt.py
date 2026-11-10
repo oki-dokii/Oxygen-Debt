@@ -65,6 +65,48 @@ class KoptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output, source)
 
+    def test_signed_division_folds_toward_zero_and_wraps(self):
+        result, output = self.run_kopt(
+            b"func test()\nentry:\n  div v1, -2147483648, -1\n"
+            b"  store 0, v1\n  div v2, -7, 2\n  store 1, v2\n"
+            b"  mod v3, -7, -2\n  ret v3\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            output,
+            b"func test()\nentry:\n  const v1, 2147483648\n  store 0, v1\n"
+            b"  const v2, 4294967293\n  store 1, v2\n  ret 4294967295\n",
+        )
+
+    def test_loop_guard_proves_nonnegative_division_and_remainder(self):
+        source = (
+            b"func test(v0)\nentry:\n  and v0, v0, 63\n  const v1, 0\n  jmp head\n"
+            b"body:\n  div v4, v1, 4\n  mod v5, v1, -8\n  store v4, v5\n"
+            b"  add v1, v1, 1\n  jmp head\nhead:\n  lt v2, v1, v0\n"
+            b"  br v2, body, done\ndone:\n  ret v1\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source.replace(b"div v4, v1, 4", b"shr v4, v1, 2")
+                         .replace(b"mod v5, v1, -8", b"and v5, v1, 7"))
+
+        machine = MACHINE.replace("lat_alu = 1", "lat_alu = 5")
+        result, output = self.run_kopt(source, machine=machine)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source)
+
+    def test_division_keeps_mixed_signs_wraparound_and_possible_zero(self):
+        source = (
+            b"func test(v0)\nentry:\n  br v0, negative, masked\n"
+            b"negative:\n  const v1, -7\n  const v2, 0\n  jmp join\n"
+            b"masked:\n  and v1, v0, 63\n  const v2, 1\n  jmp join\n"
+            b"join:\n  div v3, v1, 4\n  add v4, v1, 2147483647\n"
+            b"  mod v5, v4, 8\n  store 0, v3\n  div v6, v5, v2\n  ret v5\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source)
+
     def test_rejects_unavailable_fused_op(self):
         result, output = self.run_kopt(b"func test()\nentry:\n  mac v0, 1, 2, 3\n  ret v0\n")
         self.assertEqual(result.returncode, 1)
