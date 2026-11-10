@@ -80,24 +80,19 @@ def hoist_loops(blocks, pure):
     return placement
 
 
-def double_loops(blocks, edits, order, machine):
+def double_loops(blocks, order, machine):
     """Replace a short back jump with two alternating, checked body copies."""
     if len(order) < 2 or not machine["taken_branch_penalty"]:
         return {}
-    retained = {
-        label: [current for instruction in block
-                if (current := edits.get(instruction.line, instruction)) is not None]
-        for label, block in blocks.items()
-    }
     incoming = Counter(
-        target for block in retained.values() for kind, target in block[-1].args if kind == "l"
+        target for block in blocks.values() for kind, target in block[-1].args if kind == "l"
     )
     occupied = set(blocks)
-    instruction_count = sum(map(len, retained.values()))
+    instruction_count = sum(map(len, blocks.values()))
     expansions = {}
     next_id = 0
     for head, body in zip(order, order[1:]):
-        header, loop = retained[head], retained[body]
+        header, loop = blocks[head], blocks[body]
         if (len(header) != 2 or header[0].op not in {"lt", "eq"} or header[1].op != "br"
                 or incoming[body] != 1 or ("l", body) not in header[1].args
                 or loop[-1].op != "jmp" or loop[-1].args != [("l", head)]

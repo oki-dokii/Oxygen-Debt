@@ -1,6 +1,6 @@
 """Simplify KIR expressions and control flow, then remove dead computations."""
 
-from collections import OrderedDict, deque
+from collections import Counter, OrderedDict, deque
 from operator import add, and_, eq, mul, or_, sub, xor
 
 from .kirlib import MASK, SIGS, Instr
@@ -301,14 +301,17 @@ def branch_targets(block):
     return tuple(dict.fromkeys(value for kind, value in block[-1].args if kind == "l"))
 
 
-def thread_jumps(blocks, edits):
+def thread_jumps(blocks, edits, order=None, profile=None):
     jumps = {
         label: block[-1].args[0][1]
         for label, block in blocks.items()
         if len(block) == 1 and block[-1].op == "jmp"
     }
-    if not jumps:
-        return
+    if not jumps and not order:
+        return False
+
+    following = dict(zip(order, order[1:])) if order else {}
+    incoming = Counter(target for block in blocks.values() for target in branch_targets(block)) if order else {}
 
     destinations = {}
     for label in jumps:
@@ -319,24 +322,53 @@ def thread_jumps(blocks, edits):
             path.append(target)
             target = jumps[target]
         # Revisiting a pending jump means the path enters a cycle.
-        destination = destinations.get(target, target)
-        for hop in path:
-            destinations[hop] = destination
+        route = destinations.get(target, (target, False, True))
+        for hop in reversed(path):
+            if route is not None and order:
+                endpoint, taken, exclusive = route
+                route = (endpoint, taken or following.get(hop) != jumps[hop],
+                         exclusive and incoming[hop] == 1 and hop != order[0])
+            destinations[hop] = route
 
-    for block in blocks.values():
+    def redirect(origin, target):
+        route = destinations.get(target)
+        if route is None:
+            return target
+        endpoint, taken, exclusive = route
+        if order and following.get(origin) == target and not (taken or exclusive):
+            # A shared chain of fallthroughs could stay in the file after this edge changes.
+            return target
+        return endpoint
+
+    changed = False
+    for label, block in blocks.items():
         original = block[-1]
         args = [
-            (kind, destinations.get(value) or value) if kind == "l" else (kind, value)
+            (kind, redirect(label, value)) if kind == "l" else (kind, value)
             for kind, value in original.args
         ]
-        if args == original.args:
-            continue
         op = original.op
-        if op == "br" and args[1] == args[2]:
+        if order and op == "jmp":
+            target = blocks[args[0][1]]
+            if len(target) == 1 and target[0].op == "ret":
+                op, args = "ret", target[0].args
+        if op == original.op and args == original.args:
+            continue
+        if profile:
+            for old, new in zip(original.args, args):
+                if old[0] == new[0] == "l" and old != new:
+                    weight = profile.pop((label, old[1]), 0)
+                    if weight:
+                        edge = label, new[1]
+                        profile[edge] = profile.get(edge, 0) + weight
+        # The late pass preserves register touches after allocation.
+        if order is None and op == "br" and args[1] == args[2]:
             op, args = "jmp", [args[1]]
         replacement = Instr(op, args, original.line, original.text)
         block[-1] = replacement
         edits[original.line] = replacement
+        changed = True
+    return changed
 
 
 def remove_unreachable_blocks(blocks, program, edits):
@@ -349,7 +381,7 @@ def remove_unreachable_blocks(blocks, program, edits):
                 reachable.add(target)
                 pending.append(target)
 
-    for label in program.block_labels:
+    for label in tuple(blocks):
         if label not in reachable:
             edits[program.label_lines[label]] = None
             for instruction in blocks.pop(label):
@@ -488,7 +520,8 @@ def optimize(program, source, machine, profile=None):
     for label, block in blocks.items():
         facts = intervals.get(label, {}).copy() if use_intervals else None
         blocks[label] = simplify_block(block, machine, edits, shared_registers, may_spill, facts, safe_memory)
-    thread_jumps(blocks, edits)
+    profile = profile.copy() if profile else None
+    thread_jumps(blocks, edits, profile=profile)
     remove_unreachable_blocks(blocks, program, edits)
     if safe_memory:
         remove_overwritten_stores(blocks, edits, safe_memory)
@@ -497,7 +530,16 @@ def optimize(program, source, machine, profile=None):
     if may_spill and live_in is not None:
         compact_registers(blocks, edits, live_in, program.params, machine)
     layout = choose_layout(blocks, edits, machine, profile)
-    expansions = double_loops(blocks, edits, layout or list(blocks), machine)
+    blocks = {
+        label: [current for instruction in block
+                if (current := edits.get(instruction.line, instruction)) is not None]
+        for label, block in blocks.items()
+    }
+    if thread_jumps(blocks, edits, layout or list(blocks)):
+        remove_unreachable_blocks(blocks, program, edits)
+        if layout:
+            layout = [label for label in layout if label in blocks]
+    expansions = double_loops(blocks, layout or list(blocks), machine)
     if edits or layout or placement or expansions:
         return render(source, edits, layout, program.label_lines, placement, expansions)
     return None

@@ -256,7 +256,7 @@ class KoptTests(unittest.TestCase):
                 )
                 result, output = self.run_kopt(source)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(output, b"func test()\r\nentry:\r\n  jmp live\r\n; note\r\nlive:\r\n  ret 7\r\n")
+                self.assertEqual(output, b"func test()\r\nentry:\r\n  ret 7\r\n; note\r\n")
 
     def test_pruning_keeps_block_with_another_reachable_predecessor(self):
         source = (
@@ -269,7 +269,7 @@ class KoptTests(unittest.TestCase):
         self.assertEqual(
             output,
             b"func test(v0)\nentry:\n  br v0, join, shared\nshared:\n  vstore 0, 7\n"
-            b"  jmp join\njoin:\n  ret 0\n",
+            b"  ret 0\njoin:\n  ret 0\n",
         )
 
     def test_jump_threading_preserves_reachable_jump_cycle(self):
@@ -290,7 +290,37 @@ class KoptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             output,
-            b"func test(v0)\nentry:\n  jmp dispatch\ndispatch:\n  jmp tail\ntail:\n  ret 7\n",
+            b"func test(v0)\nentry:\n  ret 7\n",
+        )
+
+    def test_late_jump_threading_preserves_shared_fallthrough(self):
+        source = (
+            b"func test(v0)\nentry:\n  br v0, bridge, other\n"
+            b"bridge:\n  mul v1, v0, 3\n  jmp hot\nhot:\n  vstore 1, 2\n  ret 7\n"
+        )
+        for end, expected in (
+            (b"other:\n  ret 3\n",
+             source.replace(b"br v0, bridge", b"br v0, hot").replace(
+                 b"bridge:\n  mul v1, v0, 3\n  jmp hot\n", b"") + b"other:\n  ret 3\n"),
+            (b"other:\n  vstore 2, 3\n  jmp bridge\n",
+             source.replace(b"  mul v1, v0, 3\n", b"") + b"other:\n  vstore 2, 3\n  jmp hot\n"),
+        ):
+            with self.subTest(end=end):
+                result, output = self.run_kopt(source + end)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(output, expected)
+
+    def test_profile_count_follows_threaded_edge(self):
+        source = (
+            b"func test(v0)\nentry:\n  br v0, hop, cold\n"
+            b"cold:\n  ret 0\nhop:\n  jmp hot\nhot:\n  ret 7\n"
+        )
+        machine = MACHINE.replace("taken_branch_penalty = 0", "taken_branch_penalty = 2")
+        profile = "edge entry hop 100\nedge hop hot 100\nedge entry cold 1\n"
+        result, output = self.run_kopt(source, machine=machine, profile=profile)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            output, b"func test(v0)\nentry:\n  br v0, hot, cold\nhot:\n  ret 7\ncold:\n  ret 0\n",
         )
 
     def test_profile_moves_hot_successor_and_preserves_both_targets(self):
