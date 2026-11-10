@@ -6,7 +6,8 @@ from operator import add, and_, eq, mul, or_, sub, xor
 from .kirlib import MASK, SIGS, Instr
 from .layout import choose_layout
 from .loops import hoist_loops
-from .ranges import entry_intervals, reduce_division, update as update_interval
+from .memory import remove_overwritten_stores
+from .ranges import entry_intervals, interval, reduce_division, update as update_interval
 from .registers import compact_registers
 
 
@@ -99,12 +100,15 @@ def simplify(op, sources):
     return None
 
 
-def simplify_block(instructions, machine, edits, shared_registers, may_spill, intervals=None):
+def simplify_block(instructions, machine, edits, shared_registers, may_spill, intervals, safe_memory):
     values = BlockValues()
     expressions = {}
     literal_memory = {}
     dynamic_memory = {}
+    address_keys = {}
+    track_stores = any(instruction.op == "store" for instruction in instructions)
     reuse_loads = machine["lat_alu"] <= machine["lat_load"]
+    reduce_divides = machine["lat_alu"] <= machine["lat_div"]
     costly_spills = may_spill and machine["reg_spill_penalty"] > machine["lat_load"]
     last_effect = 0
     block = []
@@ -113,7 +117,7 @@ def simplify_block(instructions, machine, edits, shared_registers, may_spill, in
         args = original.args
         defines = SIGS[op].startswith("d")
         value = ("value", original.line)
-        if intervals is not None and op in {"div", "mod"}:
+        if reduce_divides and intervals is not None and op in {"div", "mod"}:
             reduced = reduce_division(op, args, intervals)
             if reduced is not None:
                 op, args = reduced
@@ -172,6 +176,15 @@ def simplify_block(instructions, machine, edits, shared_registers, may_spill, in
                 if op == "load":
                     memory[address] = value
 
+        if intervals is not None and op in {"load", "store"}:
+            operand = args[1] if op == "load" else args[0]
+            lo, hi = interval(intervals, operand)
+            if 0 <= lo <= hi < 4096:
+                key = ("i", lo) if lo == hi else values.read(operand)
+                safe_memory[original.line] = address_keys.get(key, key)
+        if track_stores and op == "add":
+            # Match repeated address additions without extending the register's lifetime.
+            address_keys[value] = ("add", *sorted(values.read(arg) for arg in args[1:]))
         if defines:
             if intervals is not None:
                 update_interval(intervals, op, args)
@@ -200,9 +213,12 @@ def use_instruction(instruction, live):
     live.update(value for kind, value in args if kind == "r")
 
 
-def scan_liveness(block, live, edits=None):
+def scan_liveness(block, live, safe_memory, edits=None):
     for instruction in reversed(block):
-        if instruction.op in PURE and instruction.args[0][1] not in live:
+        discardable = instruction.op in PURE or (
+            instruction.op == "load" and instruction.line in safe_memory
+        )
+        if discardable and instruction.args[0][1] not in live:
             if edits is not None:
                 edits[instruction.line] = None
             continue
@@ -323,7 +339,7 @@ def remove_unreachable_blocks(blocks, program, edits):
                 edits[instruction.line] = None
 
 
-def remove_dead_code(blocks, edits, machine, may_spill):
+def remove_dead_code(blocks, edits, machine, may_spill, safe_memory):
     successors = {}
     predecessors = {label: [] for label in blocks}
     for label, block in blocks.items():
@@ -351,9 +367,9 @@ def remove_dead_code(blocks, edits, machine, may_spill):
             # With incomplete facts, only blocks that have no successors can be pruned.
             for terminal, block in blocks.items():
                 if not successors[terminal]:
-                    scan_liveness(block, set(), edits)
+                    scan_liveness(block, set(), safe_memory, edits)
             return
-        live = scan_liveness(blocks[label], live_out(label))
+        live = scan_liveness(blocks[label], live_out(label), safe_memory)
         if live != live_in[label]:
             live_in[label] = live
             for predecessor in predecessors[label]:
@@ -362,7 +378,7 @@ def remove_dead_code(blocks, edits, machine, may_spill):
                     queued.add(predecessor)
 
     for label, block in blocks.items():
-        scan_liveness(block, live_out(label), edits)
+        scan_liveness(block, live_out(label), safe_memory, edits)
         if may_spill or machine["fused_mac"] or machine["fused_addsh"]:
             combine_block(block, live_out(label), edits, machine, may_spill)
     return live_in
@@ -427,17 +443,21 @@ def optimize(program, source, machine, profile=None):
         label: program.instrs[start:end]
         for label, start, end in zip(program.block_labels, starts, ends)
     }
-    use_intervals = machine["lat_alu"] <= machine["lat_div"] and any(
-        instruction.op in {"div", "mod"} for instruction in program.instrs
-    )
+    range_ops = {"load", "store"}
+    if machine["lat_alu"] <= machine["lat_div"]:
+        range_ops.update(("div", "mod"))
+    use_intervals = any(instruction.op in range_ops for instruction in program.instrs)
     intervals = entry_intervals(blocks) if use_intervals else {}
+    safe_memory = {}
     for label, block in blocks.items():
         facts = intervals.get(label, {}).copy() if use_intervals else None
-        blocks[label] = simplify_block(block, machine, edits, shared_registers, may_spill, facts)
+        blocks[label] = simplify_block(block, machine, edits, shared_registers, may_spill, facts, safe_memory)
     thread_jumps(blocks, edits)
     remove_unreachable_blocks(blocks, program, edits)
+    if safe_memory:
+        remove_overwritten_stores(blocks, edits, safe_memory)
     placement = hoist_loops(blocks, PURE)
-    live_in = remove_dead_code(blocks, edits, machine, may_spill)
+    live_in = remove_dead_code(blocks, edits, machine, may_spill, safe_memory)
     if may_spill and live_in is not None:
         compact_registers(blocks, edits, live_in, program.params, machine)
     layout = choose_layout(blocks, edits, machine, profile)

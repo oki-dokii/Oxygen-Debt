@@ -165,6 +165,43 @@ class KoptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output, source.replace(b"  and v4, v0, 1\n", b""))
 
+    def test_unused_load_requires_both_address_bounds(self):
+        source = (
+            b"func test(v0)\nentry:\n  and v1, v0, 4095\n  load v2, v1\n"
+            b"  load v3, 4096\n  load v4, -1\n  ret 0\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source.replace(b"  and v1, v0, 4095\n  load v2, v1\n", b""))
+
+    def test_negated_bounds_guard_proves_unused_load_safe(self):
+        source = (
+            b"func test(v0)\nentry:\n  and v1, v0, 8191\n  lt v2, v1, 4096\n"
+            b"  eq v2, 0, v2\n  br v2, fault, ok\n"
+            b"fault:\n  trap 7\nok:\n  load v3, v1\n  ret 0\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source.replace(b"  load v3, v1\n", b""))
+
+    def test_overwritten_store_preserves_observers_and_trapping_continuations(self):
+        prefix = (
+            b"func test(v0)\nentry:\n  and v1, v0, 63\n  add v2, 100, v1\n"
+            b"  store v2, 7\n"
+        )
+        suffix = b"  add v3, v1, 100\n  store v3, 9\n"
+        for middle, ending, removed in (
+            (b"", b"  ret 0\n", True),
+            (b"  load v4, v2\n  vstore 7, v4\n", b"  ret 0\n", False),
+            (b"  vstore 7, 0\n", b"  ret 0\n", False),
+            (b"", b"  jmp fault\nfault:\n  trap 7\n", False),
+        ):
+            with self.subTest(middle=middle, ending=ending):
+                result, output = self.run_kopt(prefix + middle + suffix + ending)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(b"  store v2, 7\n" not in output, removed)
+                self.assertIn(b"  store v3, 9\n", output)
+
     def test_store_forwarding_keeps_the_trap_and_checks_aliases(self):
         result, output = self.run_kopt(
             b"func test(v0, v1)\nentry:\n"

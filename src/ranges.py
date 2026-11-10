@@ -1,4 +1,4 @@
-"""Conservative signed intervals for arithmetic and direct comparison edges."""
+"""Conservative signed intervals for arithmetic and comparison edges."""
 
 from collections import deque
 
@@ -66,15 +66,25 @@ def comparison_edges(block, facts):
     if branch.op != "br" or len(block) < 2:
         return
     comparison = block[-2]
-    if comparison.op != "lt" or comparison.args[0] != branch.args[0]:
+    if comparison.args[0] != branch.args[0]:
+        return
+    negation = None
+    if comparison.op == "eq" and len(block) >= 3:
+        candidate = block[-3]
+        if candidate.op == "lt" and (
+            comparison.args[1:] == [candidate.args[0], ("i", 0)]
+            or comparison.args[1:] == [("i", 0), candidate.args[0]]
+        ):
+            negation, comparison = comparison.args[0], candidate
+    if comparison.op != "lt":
         return
     dest, left, right = comparison.args
-    if dest in (left, right) or left == right:
+    if dest in (left, right) or negation in (left, right) or left == right:
         return
     a, b = interval(facts, left), interval(facts, right)
     true = (a[0], min(a[1], b[1] - 1)), (max(b[0], a[0] + 1), b[1])
     false = (max(a[0], b[0]), a[1]), (b[0], min(b[1], a[1]))
-    return (left, right), (true, false)
+    return (left, right), (false, true) if negation is not None else (true, false)
 
 
 def entry_intervals(blocks):
