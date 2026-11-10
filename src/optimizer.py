@@ -5,6 +5,7 @@ from operator import add, and_, eq, mul, or_, sub, xor
 
 from .kirlib import MASK, SIGS, Instr
 from .layout import choose_layout
+from .loops import hoist_loops
 from .ranges import entry_intervals, reduce_division, update as update_interval
 from .registers import compact_registers
 
@@ -367,7 +368,7 @@ def remove_dead_code(blocks, edits, machine, may_spill):
     return live_in
 
 
-def render(source, edits, layout=None, label_lines=None):
+def render(source, edits, layout=None, label_lines=None, placement=None):
     lines = source.splitlines(keepends=True)
     for number, replacement in edits.items():
         index = number - 1
@@ -383,6 +384,13 @@ def render(source, edits, layout=None, label_lines=None):
                          for kind, value in replacement.args)
         suffix = f" ;{comment}" if separator else ""
         lines[index] = f"{indent}{replacement.op} {args}{suffix}{ending}"
+    if placement:
+        insertions = {}
+        for origin, anchor in placement.items():
+            insertions.setdefault(anchor, []).append(lines[origin - 1])
+            lines[origin - 1] = ""
+        for anchor, moved in insertions.items():
+            lines[anchor - 1] = "".join(moved) + lines[anchor - 1]
     if layout is None:
         return "".join(lines)
 
@@ -428,8 +436,11 @@ def optimize(program, source, machine, profile=None):
         blocks[label] = simplify_block(block, machine, edits, shared_registers, may_spill, facts)
     thread_jumps(blocks, edits)
     remove_unreachable_blocks(blocks, program, edits)
+    placement = hoist_loops(blocks, PURE)
     live_in = remove_dead_code(blocks, edits, machine, may_spill)
     if may_spill and live_in is not None:
         compact_registers(blocks, edits, live_in, program.params, machine)
     layout = choose_layout(blocks, edits, machine, profile)
-    return render(source, edits, layout, program.label_lines) if edits or layout else None
+    if edits or layout or placement:
+        return render(source, edits, layout, program.label_lines, placement)
+    return None

@@ -95,6 +95,28 @@ class KoptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output, source)
 
+    def test_loop_hoisting_moves_arithmetic_and_keeps_trapping_load_in_body(self):
+        chain = b"  mul v2, v1, 3 ; invariant\r\n  add v3, v2, 2\r\n"
+        source = (
+            b"func test(v0, v1)\r\nentry:\r\n  and v0, v0, 7\r\n  jmp head\r\n"
+            b"head:\r\n  br v0, body, done\r\nbody:\r\n" + chain
+            + b"  load v4, v3\r\n  vstore 7, v4\r\n  sub v0, v0, 1\r\n"
+            b"  jmp head\r\ndone:\r\n  ret 0\r\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source.replace(chain, b"").replace(b"  jmp head", chain + b"  jmp head", 1))
+
+    def test_loop_hoisting_preserves_value_on_zero_iterations(self):
+        source = (
+            b"func test(v0, v1)\nentry:\n  const v3, 9\n  jmp head\n"
+            b"head:\n  br v0, body, done\nbody:\n  mul v2, v1, 3\n  add v3, v2, 2\n"
+            b"  vstore 7, v3\n  sub v0, v0, 1\n  jmp head\ndone:\n  ret v3\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source)
+
     def test_division_keeps_mixed_signs_wraparound_and_possible_zero(self):
         source = (
             b"func test(v0)\nentry:\n  br v0, negative, masked\n"
