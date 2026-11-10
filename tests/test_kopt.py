@@ -117,6 +117,35 @@ class KoptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output, source)
 
+    def test_loop_doubling_keeps_entry_check_and_checks_each_copy(self):
+        source = (
+            b"func test(v0)\r\nentry:\r\n  const v1, 0\r\n  jmp head\r\n"
+            b"kopt_loop_0:\r\n  ret v1\r\nhead:\r\n  lt v2, v1, v0\r\n"
+            b"  br v2, body, kopt_loop_0\r\nbody:\r\n  store v1, v1\r\n"
+            b"  add v1, v1, 1\r\n  jmp head ; back"
+        )
+        machine = MACHINE.replace("taken_branch_penalty = 0", "taken_branch_penalty = 2")
+        result, output = self.run_kopt(source, machine=machine)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            output,
+            source.replace(
+                b"  jmp head ; back",
+                b"  lt v2, v1, v0\r\n  br v2, kopt_loop_1, kopt_loop_0 ; back\r\n"
+                b"kopt_loop_1:\r\n  store v1, v1\r\n  add v1, v1, 1\r\n"
+                b"  lt v2, v1, v0\r\n  br v2, body, kopt_loop_0",
+            ),
+        )
+        for variant, config in (
+            (source.replace(b"store v1, v1", b"vstore v1, v1"), machine),
+            (source, machine.replace("icache_size = 64", "icache_size = 9")
+             .replace("icache_penalty = 0", "icache_penalty = 2")),
+        ):
+            with self.subTest(config=config):
+                result, output = self.run_kopt(variant, machine=config)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(output, variant)
+
     def test_division_keeps_mixed_signs_wraparound_and_possible_zero(self):
         source = (
             b"func test(v0)\nentry:\n  br v0, negative, masked\n"

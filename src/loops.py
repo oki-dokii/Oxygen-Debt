@@ -1,9 +1,9 @@
-"""Hoist pure arithmetic from loops with a header, body, and existing preheader."""
+"""Optimize simple loops without changing their entry or exit conditions."""
 
 from collections import Counter
 
-from .kirlib import SIGS
-from .registers import register_reads
+from .kirlib import Instr, SIGS
+from .registers import register_names, register_reads
 
 
 def hoist_loops(blocks, pure):
@@ -78,3 +78,48 @@ def hoist_loops(blocks, pure):
         blocks[preheader][-1:-1] = moved
         blocks[body] = retained
     return placement
+
+
+def double_loops(blocks, edits, order, machine):
+    """Replace a short back jump with two alternating, checked body copies."""
+    if len(order) < 2 or not machine["taken_branch_penalty"]:
+        return {}
+    retained = {
+        label: [current for instruction in block
+                if (current := edits.get(instruction.line, instruction)) is not None]
+        for label, block in blocks.items()
+    }
+    incoming = Counter(
+        target for block in retained.values() for kind, target in block[-1].args if kind == "l"
+    )
+    occupied = set(blocks)
+    instruction_count = sum(map(len, retained.values()))
+    expansions = {}
+    next_id = 0
+    for head, body in zip(order, order[1:]):
+        header, loop = retained[head], retained[body]
+        if (len(header) != 2 or header[0].op not in {"lt", "eq"} or header[1].op != "br"
+                or incoming[body] != 1 or ("l", body) not in header[1].args
+                or loop[-1].op != "jmp" or loop[-1].args != [("l", head)]
+                or not 2 <= len(loop) <= 12):
+            continue
+        if any(instruction.op in {"vload", "vstore"} for instruction in loop):
+            continue
+        if machine["reg_spill_penalty"] and len(register_names(header + loop)) > machine["registers"]:
+            continue
+        growth = len(loop) + 2
+        if machine["icache_penalty"] and instruction_count + growth > machine["icache_size"]:
+            continue
+
+        label = f"kopt_loop_{next_id}"
+        while label in occupied:
+            next_id += 1
+            label = f"kopt_loop_{next_id}"
+        occupied.add(label)
+        next_id += 1
+        comparison, branch = header
+        targets = [("l", label) if arg == ("l", body) else arg for arg in branch.args]
+        first_branch = Instr("br", targets, loop[-1].line, loop[-1].text)
+        expansions[loop[-1].line] = (comparison, first_branch, label, *loop[:-1], comparison, branch)
+        instruction_count += growth
+    return expansions

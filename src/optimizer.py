@@ -5,7 +5,7 @@ from operator import add, and_, eq, mul, or_, sub, xor
 
 from .kirlib import MASK, SIGS, Instr
 from .layout import choose_layout
-from .loops import hoist_loops
+from .loops import double_loops, hoist_loops
 from .memory import remove_overwritten_stores
 from .ranges import entry_intervals, interval, reduce_division, update as update_interval
 from .registers import compact_registers
@@ -401,7 +401,13 @@ def remove_dead_code(blocks, edits, machine, may_spill, safe_memory):
     return live_in
 
 
-def render(source, edits, layout=None, label_lines=None, placement=None):
+def format_instruction(instruction):
+    args = ", ".join(f"v{value}" if kind == "r" else str(value)
+                     for kind, value in instruction.args)
+    return f"{instruction.op} {args}"
+
+
+def render(source, edits, layout=None, label_lines=None, placement=None, expansions=None):
     lines = source.splitlines(keepends=True)
     for number, replacement in edits.items():
         index = number - 1
@@ -413,10 +419,23 @@ def render(source, edits, layout=None, label_lines=None, placement=None):
         if replacement is None:
             lines[index] = indent + separator + comment + ending if separator else ""
             continue
-        args = ", ".join(f"v{value}" if kind == "r" else str(value)
-                         for kind, value in replacement.args)
         suffix = f" ;{comment}" if separator else ""
-        lines[index] = f"{indent}{replacement.op} {args}{suffix}{ending}"
+        lines[index] = f"{indent}{format_instruction(replacement)}{suffix}{ending}"
+    if expansions:
+        default_ending = lines[0][len(lines[0].splitlines()[0]):] or "\n"
+        for anchor, instructions in expansions.items():
+            line = lines[anchor - 1]
+            body = line.splitlines()[0]
+            statement, separator, comment = body.partition(";")
+            indent = statement[:len(statement) - len(statement.lstrip())]
+            ending = line[len(body):]
+            emitted = [
+                f"{item}:" if isinstance(item, str) else indent + format_instruction(item)
+                for item in instructions
+            ]
+            if separator:
+                emitted[1] += f" ;{comment}"
+            lines[anchor - 1] = (ending or default_ending).join(emitted) + ending
     if placement:
         insertions = {}
         for origin, anchor in placement.items():
@@ -478,6 +497,7 @@ def optimize(program, source, machine, profile=None):
     if may_spill and live_in is not None:
         compact_registers(blocks, edits, live_in, program.params, machine)
     layout = choose_layout(blocks, edits, machine, profile)
-    if edits or layout or placement:
-        return render(source, edits, layout, program.label_lines, placement)
+    expansions = double_loops(blocks, edits, layout or list(blocks), machine)
+    if edits or layout or placement or expansions:
+        return render(source, edits, layout, program.label_lines, placement, expansions)
     return None
