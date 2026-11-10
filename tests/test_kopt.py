@@ -256,3 +256,23 @@ class KoptTests(unittest.TestCase):
         result, output = self.run_kopt(live_temp, machine=machine)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output, live_temp)
+
+    def test_register_reuse_preserves_join_values_and_volatile_operands(self):
+        source = (
+            b"func test(v0)\nentry:\n  add v1, v0, 1\n  xor v7, v1, 17\n"
+            b"  br v0, hot, cold\nhot:\n  vload v10, 7\n  add v3, v10, v7\n"
+            b"  load v3, v3\n  xor v4, v3, v7\n  store 4, v4\n  jmp end\n"
+            b"cold:\n  add v8, v7, 2\n  mul v9, v8, 3\n  store 4, v9\n  jmp end\n"
+            b"end:\n  vstore 8, v7\n  ret v7\n"
+        )
+        machine = MACHINE.replace("reg_spill_penalty = 0", "reg_spill_penalty = 5")
+        result, output = self.run_kopt(source, machine=machine)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            output,
+            b"func test(v0)\nentry:\n  add v1, v0, 1\n  xor v7, v1, 17\n"
+            b"  br v0, hot, cold\nhot:\n  vload v10, 7\n  add v1, v10, v7\n"
+            b"  load v1, v1\n  xor v1, v1, v7\n  store 4, v1\n  jmp end\n"
+            b"cold:\n  add v1, v7, 2\n  mul v1, v1, 3\n  store 4, v1\n  jmp end\n"
+            b"end:\n  vstore 8, v7\n  ret v7\n",
+        )

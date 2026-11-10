@@ -5,6 +5,7 @@ from operator import add, and_, eq, mul, or_, sub, xor
 
 from .kirlib import MASK, SIGS, Instr
 from .layout import choose_layout
+from .registers import compact_registers
 
 
 BINARY = {
@@ -356,6 +357,7 @@ def remove_dead_code(blocks, edits, machine, may_spill):
         scan_liveness(block, live_out(label), edits)
         if may_spill or machine["fused_mac"] or machine["fused_addsh"]:
             combine_block(block, live_out(label), edits, machine, may_spill)
+    return live_in
 
 
 def render(source, edits, layout=None, label_lines=None):
@@ -413,6 +415,8 @@ def optimize(program, source, machine, profile=None):
         )
     thread_jumps(blocks, edits)
     remove_unreachable_blocks(blocks, program, edits)
-    remove_dead_code(blocks, edits, machine, may_spill)
+    live_in = remove_dead_code(blocks, edits, machine, may_spill)
+    if may_spill and live_in is not None:
+        compact_registers(blocks, edits, live_in, program.params, machine)
     layout = choose_layout(blocks, edits, machine, profile)
     return render(source, edits, layout, program.label_lines) if edits or layout else None
