@@ -99,6 +99,10 @@ def simplify(op, sources):
 def simplify_block(instructions, machine, edits, shared_registers, may_spill):
     values = BlockValues()
     expressions = {}
+    literal_memory = {}
+    dynamic_memory = {}
+    reuse_loads = machine["lat_alu"] <= machine["lat_load"]
+    costly_spills = may_spill and machine["reg_spill_penalty"] > machine["lat_load"]
     last_effect = 0
     block = []
     for original in instructions:
@@ -135,6 +139,31 @@ def simplify_block(instructions, machine, edits, shared_registers, may_spill):
                     op, args = "jmp", [when_true]
                 elif condition[0] == "i":
                     op, args = "jmp", [when_true if condition[1] else when_false]
+        elif reuse_loads and op in {"load", "store"}:
+            address = values.read(args[1] if op == "load" else args[0])
+            literal = address[0] == "i"
+            memory = literal_memory if literal else dynamic_memory
+            if op == "store":
+                # Unknown addresses may alias anything. Distinct literals cannot alias.
+                dynamic_memory.clear()
+                if not literal:
+                    literal_memory.clear()
+                memory[address] = values.read(args[1])
+            else:
+                earlier = memory.get(address)
+                if earlier is not None:
+                    # Reaching here means the earlier access to this address succeeded.
+                    source = None
+                    if earlier[0] == "i":
+                        source = earlier
+                    elif not (costly_spills and (literal or args[0] == args[1])):
+                        # Avoid adding a register touch to a single-register load.
+                        source = values.representative(earlier)
+                    if source is not None:
+                        op = "const" if source[0] == "i" else "mov"
+                        args = [args[0], source]
+                if op == "load":
+                    memory[address] = value
 
         if defines:
             if op in {"const", "mov"}:

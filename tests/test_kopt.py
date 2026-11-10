@@ -101,6 +101,20 @@ class KoptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output, source.replace(b"  and v4, v0, 1\n", b""))
 
+    def test_store_forwarding_keeps_the_trap_and_checks_aliases(self):
+        result, output = self.run_kopt(
+            b"func test(v0, v1)\nentry:\n"
+            b"  store v0, 12\n  load v2, v0\n  vstore 0, v2\n"
+            b"  store v1, 7\n  load v3, v0\n  ret v3\n"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            output,
+            b"func test(v0, v1)\nentry:\n"
+            b"  store v0, 12\n  const v2, 12\n  vstore 0, v2\n"
+            b"  store v1, 7\n  load v3, v0\n  ret v3\n",
+        )
+
     def test_constant_branch_prunes_unreachable_cycle_and_effects(self):
         for condition, targets in ((b"0", b"dead, live"), (b"-1", b"live, dead")):
             with self.subTest(condition=condition):

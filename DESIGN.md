@@ -2,7 +2,7 @@
 
 ## What is implemented
 
-The Python CLI parses KIR, validates the requested machine, and runs local simplification, common subexpression elimination, branch folding, jump threading, unreachable-block removal, dead-code removal, copy elision, and instruction fusion. A supplied profile can guide block layout. With no edits, the CLI emits the original bytes. The parser, machine loader, and fused-feature validation in `src/kirlib.py` are adapted from the official COMP10 starter kit at commit `d23ac1d`. [Upstream source](https://github.com/rudra-shroff06/LLH-26/blob/d23ac1d865df4cdacf7ad8e9fff3e1d560761c46/Compilers/COMP10/kirlib.py)
+The Python CLI parses KIR, validates the requested machine, and runs local simplification, common subexpression elimination, load reuse, branch folding, jump threading, unreachable-block removal, dead-code removal, copy elision, and instruction fusion. A supplied profile can guide block layout. With no edits, the CLI emits the original bytes. The parser, machine loader, and fused-feature validation in `src/kirlib.py` are adapted from the official COMP10 starter kit at commit `d23ac1d`. [Upstream source](https://github.com/rudra-shroff06/LLH-26/blob/d23ac1d865df4cdacf7ad8e9fff3e1d560761c46/Compilers/COMP10/kirlib.py)
 
 ## Pass order
 
@@ -14,6 +14,8 @@ The CLI checks the input and machine, walks forward to simplify expressions and 
 
 **Common subexpression elimination.** Key pure arithmetic, comparisons, and selects by their opcode and operand values. Normalize operand order for commutative operations. Reuse an expression only while a register still holds its result. Table lookups take expected constant time per instruction.
 
+**Load reuse.** Record the value read or written at each address within a block. A store to a literal address invalidates facts for all dynamic addresses and updates its own slot. A dynamic store invalidates both tables before recording its value. Reuse a literal or a register that still holds the recorded value. Reaching the second access proves that the earlier access to that address succeeded, so the removed load cannot introduce a new trap. The two tables take linear total work to maintain because each cleared entry must first have been inserted.
+
 **Control flow.** Replace a branch with a jump if its condition is known within the block or both targets are identical. Resolve each chain of jump-only blocks to its endpoint, caching the result for every hop. Paths that enter a jump cycle keep their original edges. Redirect branches and jumps to resolved endpoints, then follow the resulting edges from the original entry and delete unvisited labels and instructions. The walks are iterative and take linear time in the number of blocks and edges, plus the time to mark removed instructions.
 
 **Dead-code removal.** Compute each block's live-out set from the union of its successors' live-in sets, then scan backward. Drop a pure instruction only if its destination is dead. Revisit predecessors when live-in changes. The cost grows with the total size of blocks and live sets visited. The worklist has a fixed budget of two million work units based on instruction visits, predecessor edges, and live-set entries. If the budget runs out, use dead-code removal only in blocks with no successors, where live-out is known to be empty.
@@ -24,11 +26,11 @@ The CLI checks the input and machine, walks forward to simplify expressions and 
 
 ## The machine
 
-The CLI checks that the original program uses only supported fused operations. It simplifies a multiplication to a constant or copy when `lat_alu` is at most `lat_mul`. When spills can cost cycles, copy propagation keeps original register operands that are read in multiple blocks, copy elision removes intermediate writes, and reuse of cheap expressions stays within uninterrupted spans of pure instructions. Fusion requires machine support and compares the fused latency with the sum of the two original latencies. When both fused forms apply, it chooses `addsh` if it has lower latency. [Decision log](docs/DECISIONS.md)
+The CLI checks that the original program uses only supported fused operations. It simplifies a multiplication to a constant or copy when `lat_alu` is at most `lat_mul` and applies a similar check against `lat_load` for load reuse. When spilling can cost more than loading, it keeps literal-address and self-overwriting loads that would gain a register read. When spills can cost cycles, copy propagation keeps original register operands that are read in multiple blocks, copy elision removes intermediate writes, and reuse of cheap expressions stays within uninterrupted spans of pure instructions. Fusion requires machine support and compares the fused latency with the sum of the two original latencies. When both fused forms apply, it chooses `addsh` if it has lower latency. [Decision log](docs/DECISIONS.md)
 
 ## Keeping the behaviour
 
-The replacements compute identical bits in the same destination or use a register that holds the same value. A folded branch jumps to the target the original would take. Threading skips only unconditional jumps, which have no register, memory, or volatile effects. Loads, stores, volatile operations, and trapping instructions in reachable blocks keep their order and original operands. The official validator checks the ending, volatile log, and data memory. [Software requirements](docs/SRS.md)
+The replacements compute identical bits in the same destination or use a register that holds the same value. A folded branch jumps to the target the original would take. Threading skips only unconditional jumps, which have no register, memory, or volatile effects. The pass keeps the order and operands of reachable stores, volatile operations, and operations that can still trap. Volatile accesses use a separate device state, so they preserve ordinary memory facts. The official interpreter checks the ending, volatile log, and data memory. [Software requirements](docs/SRS.md)
 
 ## Profiles
 

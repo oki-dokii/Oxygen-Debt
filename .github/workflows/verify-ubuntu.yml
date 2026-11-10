@@ -31,3 +31,4 @@ jobs:
           python3 -m unittest discover -s tests
           sh tests/demo.sh "$kit"
           python3 tests/benchmark.py "$kit" --random 64 --seed 832719
+          python3 tests/stress.py "$kit"
