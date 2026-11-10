@@ -103,6 +103,7 @@ def simplify(op, sources):
 def simplify_block(instructions, machine, edits, shared_registers, may_spill, intervals, safe_memory):
     values = BlockValues()
     expressions = {}
+    negated_tests = {}
     literal_memory = {}
     dynamic_memory = {}
     address_keys = {}
@@ -150,6 +151,16 @@ def simplify_block(instructions, machine, edits, shared_registers, may_spill, in
                     op, args = "jmp", [when_true]
                 elif condition[0] == "i":
                     op, args = "jmp", [when_true if condition[1] else when_false]
+                else:
+                    tested = negated_tests.get(values.read(condition))
+                    if tested is not None:
+                        operand, tested_value = tested
+                        # Keep the original spelling when possible to avoid keeping a copy live.
+                        source = (operand if values.read(operand) == tested_value
+                                  else values.representative(tested_value))
+                        if (source is not None and operand[1] not in shared_registers
+                                and source[1] not in shared_registers):
+                            args = [source, when_false, when_true]
         elif reuse_loads and op in {"load", "store"}:
             address = values.read(args[1] if op == "load" else args[0])
             literal = address[0] == "i"
@@ -186,6 +197,12 @@ def simplify_block(instructions, machine, edits, shared_registers, may_spill, in
             # Match repeated address additions without extending the register's lifetime.
             address_keys[value] = ("add", *sorted(values.read(arg) for arg in args[1:]))
         if defines:
+            if op == "eq":
+                left, right = args[1:]
+                if right == ("i", 0):
+                    negated_tests[value] = left, values.read(left)
+                elif left == ("i", 0):
+                    negated_tests[value] = right, values.read(right)
             if intervals is not None:
                 update_interval(intervals, op, args)
             if op in {"const", "mov"}:

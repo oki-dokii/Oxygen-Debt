@@ -275,6 +275,36 @@ class KoptTests(unittest.TestCase):
             b"; header\nfunc test(v0)\nentry:\n  br v0, hot, cold\nhot:\n  ret 7\ncold:\n  ret 0\n",
         )
 
+    def test_zero_test_branch_inversion_preserves_profile_targets(self):
+        source = (
+            b"func test(v0)\nentry:\n  eq v1, 0, v0\n  br v1, zero, nonzero\n"
+            b"zero:\n  ret 7\nnonzero:\n  ret v0\n"
+        )
+        machine = MACHINE.replace("taken_branch_penalty = 0", "taken_branch_penalty = 3")
+        profile = "edge entry nonzero 100\nedge entry zero 1\n"
+        result, output = self.run_kopt(source, machine=machine, profile=profile)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            output,
+            b"func test(v0)\nentry:\n  br v0, nonzero, zero\n"
+            b"nonzero:\n  ret v0\nzero:\n  ret 7\n",
+        )
+
+    def test_zero_test_branch_inversion_requires_current_holder(self):
+        source = (
+            b"func test(v0)\nentry:\n  eq v1, v0, 0\n  vload v0, 7\n"
+            b"  br v1, zero, nonzero\nzero:\n  ret 7\nnonzero:\n  ret v0\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source)
+
+        with_alias = source.replace(b"  eq v1, v0, 0", b"  mov v2, v0\n  eq v1, v0, 0")
+        result, output = self.run_kopt(with_alias)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, with_alias.replace(b"  eq v1, v0, 0\n", b"")
+                         .replace(b"br v1, zero, nonzero", b"br v2, nonzero, zero"))
+
     def test_layout_keeps_hot_loop_in_cache(self):
         source = b"func test(v0)\nentry:\n  br v0, done, loop\nloop:\n  jmp loop\ndone:\n  ret 7\n"
         profile = "edge entry done 10\nedge loop loop 100\n"
