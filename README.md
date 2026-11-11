@@ -39,7 +39,7 @@ python3 tests/finite.py /path/to/LLH-26/Compilers/COMP10
 python3 tests/scheduling.py /path/to/LLH-26/Compilers/COMP10
 ```
 
-The 2026-11-12 local release run used organizer kit commit `d23ac1d` and all 100 supplied programs on five supplied machines. All 500 sample executions and 32,000 generated comparisons matched the independent organizer interpreter. These are summed sample cycles, not the judges' geometric-mean score or a prediction for unseen programs.
+The 2026-11-12 local release run used organizer kit commit `d23ac1d` and all 100 supplied programs on five supplied machines. All 500 sample executions and 32,000 generated comparisons matched the independent organizer interpreter. These are summed sample cycles, not an official judging score or a prediction for unseen programs.
 
 | Machine | Original cycles | Optimized cycles |
 |---|---:|---:|
