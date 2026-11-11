@@ -3,6 +3,7 @@
 from collections import Counter, OrderedDict, deque
 
 from .arithmetic import BINARY, COMMUTATIVE, simplify
+from .branches import select_assignments
 from .kirlib import MASK, SIGS, Instr
 from .layout import choose_layout
 from .loops import double_loops, hoist_loops
@@ -488,7 +489,10 @@ def optimize(program, source, machine, profile=None):
     remove_unreachable_blocks(blocks, program, edits)
     if safe_memory:
         remove_overwritten_stores(blocks, edits, safe_memory)
-    placement = hoist_loops(blocks, PURE)
+    placement = select_assignments(blocks, edits)
+    if placement:
+        remove_unreachable_blocks(blocks, program, edits)
+    placement.update(hoist_loops(blocks, PURE))
     live_in = remove_dead_code(blocks, edits, machine, may_spill, safe_memory)
     if may_spill and live_in is not None:
         compact_registers(blocks, edits, live_in, program.params, machine)

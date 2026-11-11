@@ -95,6 +95,52 @@ class KoptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output, source)
 
+    def test_select_diamond_reads_condition_before_overwriting_destination(self):
+        source = (
+            b"func test(v0, v1)\nentry:\n  br v0, yes, no\n"
+            b"yes:\n  mov v0, v1\n  jmp done\nno:\n  const v0, -1\n  jmp done\n"
+            b"done:\n  ret v0\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, b"func test(v0, v1)\nentry:\n  select v0, v0, v1, 4294967295\n  ret v0\n")
+
+    def test_select_diamond_keeps_arithmetic_arms(self):
+        source = (
+            b"func test(v0, v1)\nentry:\n  br v0, yes, no\n"
+            b"yes:\n  add v2, v1, 1\n  jmp done\nno:\n  sub v2, v1, 1\n  jmp done\n"
+            b"done:\n  ret v2\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn(b"select ", output)
+        self.assertIn(b"br v0, yes, no", output)
+        aliases = source.replace(b"v2", b"v1")
+        result, output = self.run_kopt(aliases)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn(b"select ", output)
+        self.assertIn(b"br v0, yes, no", output)
+
+    def test_select_diamond_keeps_effects_and_external_entries(self):
+        source = (
+            b"func test(v0, v1, v2)\nentry:\n  br v0, yes, no\n"
+            b"yes:\n  load v3, v1\n  jmp done\nno:\n  const v3, 3\n  jmp done\n"
+            b"done:\n  ret v3\n"
+        )
+        for arm in (b"load v3, v1", b"vload v3, v1"):
+            with self.subTest(arm=arm):
+                result, output = self.run_kopt(source.replace(b"load v3, v1", arm))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertNotIn(b"select ", output)
+                self.assertIn(arm, output)
+        external = source.replace(
+            b"entry:\n  br v0", b"entry:\n  br v2, choose, yes\nchoose:\n  br v0",
+        ).replace(b"load v3, v1", b"mov v3, v1")
+        result, output = self.run_kopt(external)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn(b"select ", output)
+        self.assertIn(b"br v0, yes, no", output)
+
     def test_retains_multiplication_if_const_has_higher_latency(self):
         source = b"func test()\nentry:\n  mul v0, 2, 3\n  store 0, v0\n  ret 0\n"
         result, output = self.run_kopt(source, machine=MACHINE.replace("lat_alu = 1", "lat_alu = 3"))
