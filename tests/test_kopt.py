@@ -60,6 +60,7 @@ class KoptTests(unittest.TestCase):
         self.assertEqual(
             output,
             source.replace(b"  const v1, 10\r\n", b"").replace(b"  const v3, 9\r\n", b"")
+            .replace(b"  jmp finish\r\nfinish:\r\n", b"")
             .replace(b"  add v4, v3, 2\r\n", b"  const v4, 11\r\n"),
         )
 
@@ -76,8 +77,7 @@ class KoptTests(unittest.TestCase):
         self.assertEqual(
             output,
             b"func test(v0)\nentry:\n  br v0, left, right\n"
-            b"left:\n  vstore 1, v0\n  ret 9\nright:\n  vstore 2, v0\n"
-            b"  jmp join\njoin:\n  ret 9\n",
+            b"left:\n  vstore 1, v0\n  ret 9\nright:\n  vstore 2, v0\n  ret 9\n",
         )
 
         mixed = source.replace(b"  const v1, 9", b"  const v1, 8")
@@ -365,7 +365,7 @@ class KoptTests(unittest.TestCase):
         )
         result, output = self.run_kopt(source)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(output, source)
+        self.assertEqual(output, source.replace(b"  jmp second\nsecond:\n  jmp first", b"  jmp first"))
 
     def test_jump_threading_keeps_entry_label_and_folds_equal_targets(self):
         source = (
@@ -526,12 +526,33 @@ class KoptTests(unittest.TestCase):
         machine = MACHINE.replace("reg_spill_penalty = 0", "reg_spill_penalty = 5")
         result, output = self.run_kopt(source, machine=machine)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(output, source.replace(b"add v5, v0, v1\n  mov v0, v5", b"add v0, v0, v1"))
+        self.assertEqual(
+            output, source.replace(b"add v5, v0, v1\n  mov v0, v5", b"add v0, v0, v1")
+            .replace(b"  jmp next\nnext:\n", b""),
+        )
 
         live_temp = source.replace(b"ret v0", b"ret v5")
         result, output = self.run_kopt(live_temp, machine=machine)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(output, live_temp)
+        self.assertEqual(output, live_temp.replace(b"  jmp next\nnext:\n", b""))
+
+    def test_block_merge_preserves_store_before_trap_and_volatile_order(self):
+        source = (
+            b"func test(v0)\nentry:\n  store 0, v0\n  jmp next\n"
+            b"next:\n  div v1, 1, v0\n  vstore 7, v1\n  ret v1\n"
+        )
+        result, output = self.run_kopt(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, source.replace(b"  jmp next\nnext:\n", b""))
+
+        shared = source.replace(
+            b"entry:\n  store", b"entry:\n  br v0, first, other\nfirst:\n  store",
+        ).replace(
+            b"next:\n", b"other:\n  vstore 6, v0\n  jmp next\nnext:\n",
+        )
+        result, output = self.run_kopt(shared)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output, shared)
 
     def test_register_reuse_preserves_join_values_and_volatile_operands(self):
         source = (

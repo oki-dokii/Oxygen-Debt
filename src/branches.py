@@ -1,4 +1,4 @@
-"""Replace isolated conditional assignments with a select."""
+"""Simplify conditional assignments and adjacent straight-line blocks."""
 
 from collections import Counter
 
@@ -37,3 +37,28 @@ def select_assignments(blocks, edits):
         left.pop(0)
         block[-1:] = [selected, jump]
     return placement
+
+
+def merge_straight_lines(blocks, edits, label_lines, order):
+    """Join adjacent blocks when the second has exactly one incoming edge."""
+    incoming = Counter(
+        target for block in blocks.values() for kind, target in block[-1].args if kind == "l"
+    )
+    changed = False
+    following = dict(zip(order, order[1:]))
+    previous = None
+    for label in tuple(blocks):
+        if previous is not None:
+            before = blocks[previous]
+            jump = before[-1]
+            if (incoming[label] == 1 and following.get(previous) == label
+                    and jump.op == "jmp" and jump.args == [("l", label)]):
+                edits[jump.line] = None
+                edits[label_lines[label]] = None
+                before.pop()
+                before.extend(blocks.pop(label))
+                following[previous] = following.get(label)
+                changed = True
+                continue
+        previous = label
+    return changed

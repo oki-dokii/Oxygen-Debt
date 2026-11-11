@@ -3,7 +3,7 @@
 from collections import Counter, OrderedDict, deque
 
 from .arithmetic import BINARY, COMMUTATIVE, simplify
-from .branches import select_assignments
+from .branches import merge_straight_lines, select_assignments
 from .kirlib import MASK, SIGS, Instr
 from .layout import choose_layout
 from .loops import double_loops, hoist_loops
@@ -504,6 +504,9 @@ def optimize(program, source, machine, profile=None):
     }
     if thread_jumps(blocks, edits, layout or list(blocks)):
         remove_unreachable_blocks(blocks, program, edits)
+        if layout:
+            layout = [label for label in layout if label in blocks]
+    if merge_straight_lines(blocks, edits, program.label_lines, layout or list(blocks)):
         if layout:
             layout = [label for label in layout if label in blocks]
     expansions = double_loops(blocks, layout or list(blocks), machine)

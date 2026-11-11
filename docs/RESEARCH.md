@@ -22,3 +22,14 @@ These checks used the organizers' original and optimized files with the same sam
 | `dead_div_trap` | Default | 15 | 14 | Preserve division when a zero divisor can still trap |
 
 The `sum_sq` example uses `mac`, so its optimized file is invalid on the no-fused machine. That is a useful machine-compatibility regression case.
+
+## Other public implementations
+
+Checked on 2026-11-11 using GitHub repository and code search, then read the public documentation. The following are separate implementations of this exact COMP10 challenge. Their performance numbers are author-reported and have not been reproduced with our runner.
+
+| Repository | Documented approach | Reported result |
+|---|---|---|
+| [RohitKattimani/COMP10_ROKACODE](https://github.com/RohitKattimani/COMP10_ROKACODE/tree/1485b298f36e8027cd7c332949933af5b6001c7a) | Python, local optimization, loop recognition, graph coloring, and a bounded square-sum formula | `sum_sq` on the default machine at 21 cycles. Its report gives 163,533 optimized cycles summed across five machines. |
+| [wildwolf07/kopt-kiln-optimizer](https://github.com/wildwolf07/kopt-kiln-optimizer/tree/1689c93ce8ae4629914aef090bf2a097e31b66c9) | C++17, SSA, machine-aware candidate search, scheduling, and structural specialization | The README's candidate table gives 8,700 cycles summed across default-machine samples. It allows individual timing regressions. |
+
+The second repository's default-machine original total is 103,671, matching the original total in our runner. That makes its reported result worth independently investigating, while a performance comparison still needs the same pinned kit, inputs, executable revision, and runner. Closed forms and scheduling are the clearest documented areas to examine next. Implementation work in this session remained independently developed.
