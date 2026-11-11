@@ -4,6 +4,8 @@ Oxygen Debt is our entry for the COMP10 compiler challenge at the Low-Level Hack
 
 `kopt` folds constants across blocks when reachable paths agree, propagates copies, and reuses equivalent computations and memory reads within a block. It uses signed ranges to simplify division and prove when ordinary memory accesses are in bounds. It replaces isolated conditional copies and constants with `select`, simplifies known branches, and bypasses jump-only chains. It removes unreachable blocks, unused safe loads, and certain overwritten stores. It hoists invariant arithmetic and doubles short loops to reduce jumps. It also reuses register names to reduce spills and combines a multiply or shift with an addition when the machine supports the fused operation.
 
+It also proves closed forms for bounded polynomial summations, schedules independent instructions, and specializes pure functions with at most ten relevant masked input bits. Specialization evaluates every value in the proven domain during compilation; it never reads benchmark input files or uses stored answers. [Proofs and limits](DESIGN.md)
+
 Use Python 3.10 or later. Set `machine.cfg` to the path of a Kiln machine file, such as `machines/machine_default.cfg` from the official kit.
 
 ```sh
@@ -20,7 +22,7 @@ Run the public sample matrix with the organizer's COMP10 directory from a separa
 python3 tests/benchmark.py /path/to/LLH-26/Compilers/COMP10 --jobs 4
 ```
 
-Replay the demo with the same external kit. It shows `sum_sq` on machines with and without fusion, then verifies the memory written before a division-by-zero trap.
+Replay the demo with the same external kit. It shows `sum_sq` on machines with and without fusion, finite specialization on `collatz`, scheduling on `matmul4`, and memory written before a division-by-zero trap.
 
 ```sh
 sh tests/demo.sh /path/to/LLH-26/Compilers/COMP10
@@ -32,7 +34,24 @@ The stress suite generates fresh KIR with memory aliases, traps, volatile I/O, a
 
 ```sh
 python3 tests/stress.py /path/to/LLH-26/Compilers/COMP10
+python3 tests/summations.py /path/to/LLH-26/Compilers/COMP10
+python3 tests/finite.py /path/to/LLH-26/Compilers/COMP10
+python3 tests/scheduling.py /path/to/LLH-26/Compilers/COMP10
 ```
+
+The 2026-11-12 local release run used organizer kit commit `d23ac1d` and all 100 supplied programs on five supplied machines. All 500 sample executions and 32,000 generated comparisons matched the independent organizer interpreter. These are summed sample cycles, not the judges' geometric-mean score or a prediction for unseen programs.
+
+| Machine | Original cycles | Optimized cycles |
+|---|---:|---:|
+| Default | 103,671 | 16,690 |
+| Few registers | 202,164 | 32,407 |
+| No fused instructions | 107,966 | 19,115 |
+| Slow memory | 111,254 | 25,752 |
+| Wide/fast | 55,744 | 16,808 |
+
+The default sample timings include `sum_sq` at 13 cycles, `collatz` at 18, and `spill_storm` at 19. These names appear only in validation and documentation, never in optimizer recognition. No supplied sample slowed against either the unoptimized source or the revision before these three passes.
+
+The parser and machine loader in `src/kirlib.py`, and execution and timing code in `src/kiln.py`, reuse permitted organizer code from the [pinned kit](https://github.com/rudra-shroff06/LLH-26/blob/d23ac1d865df4cdacf7ad8e9fff3e1d560761c46/Compilers/COMP10/kirlib.py). The optimizer passes and generated test suites are our implementation. Runtime requires only the Python standard library; the external kit is used for independent validation.
 
 The [workflow and handoff](docs/WORKFLOW.md) records the latest measured results and next step.
 

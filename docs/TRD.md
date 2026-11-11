@@ -8,9 +8,11 @@ flowchart LR
     B --> C["Simplify arithmetic and propagate copies"]
     C --> D["Simplify branches and remove unreachable blocks"]
     D --> E["Compute liveness and remove dead pure instructions"]
-    E --> F["Apply measured machine-specific passes"]
+    E --> S["Prove bounded polynomial recurrences"]
+    S --> F["Reuse registers, lay out and schedule blocks"]
     P["Optional edge counts"] --> F
-    F --> G["Emit valid KIR"]
+    F --> Q["Prove and exhaustively specialize finite domains"]
+    Q --> G["Emit valid KIR"]
     G --> H["Offline validation and cycle measurement"]
 ```
 
@@ -30,7 +32,10 @@ flowchart LR
 | Liveness and dead code | Compute live-out as the union of successor live-ins. Use a backward worklist and scan instructions in reverse to find dead definitions. | Delete only pure, non-trapping instructions whose destination is dead. Keep stores, volatile operations, and potential traps. |
 | Fusion | Recognize nearby multiply-add and shift-add patterns. Check machine features and compare modeled costs. | The intermediate value must be removable, operands must still denote the same values, and the fused shift count must be a legal literal. |
 | Register reuse | Assign a shared pool of register names to block-local definitions after liveness and fusion. Use the machine's register count and estimate reloads on short cycles that could still spill. | Reserve parameters, registers live at block boundaries, and registers used by volatile I/O. Read operands before freeing their names for new definitions. |
+| Polynomial summations | Symbolically derive `a + p(i)` of degree at most three and emit bounded closed forms. | Require index zero, stride one, invariant bound 0–255, sole-entry body and return-only exit. Reject effects and unsupported carried state; prove additional signed bounds before moving a final modulus. |
+| Scheduling | Greedily reorder blocks of at most 32 operations using register dependencies and critical paths, then compare modeled short paths. | Preserve RAW/WAR/WAW edges and effect order, keep terminators last, skip volatile blocks and spilling programs. |
+| Finite specialization | Prove at most ten original input bits affect a pure function, evaluate the entire domain, and compare decision-tree and packed-literal candidates. | Reject memory, multiple read parameters, unmasked original reads, any trapping or nonreturning representative, and budget exhaustion. Exhaustively verify generated candidates. |
 
 Keep the local passes linear in the number of instructions where practical. Avoid tables indexed by the largest register number and full scans for each individual rewrite. Use stable iteration order and a deterministic work budget for optional expensive analyses. The original input is a fallback when it is valid for the selected machine. Handle unsupported fused opcodes deliberately if the input contract requires lowering them, and document the behavior before relying on that path.
 
-The optimizer reads no benchmark inputs. The offline runner invokes the independent official tools on original and optimized programs with identical inputs and machine settings. Use trace output to investigate instruction issue stalls, branch penalties, and register spill regressions.
+The optimizer reads no benchmark inputs. `src/kiln.py` contains permitted organizer execution and timing code, with its upstream revision credited in the module and design. Finite specialization uses only source-derived representatives after proving the complete relevant domain. Scheduling uses structural paths, not test inputs. The offline runner invokes the independent official tools on original and optimized programs with identical inputs and machine settings. Use trace output to investigate instruction issue stalls, branch penalties, and register spill regressions.

@@ -10,6 +10,8 @@ from .loops import double_loops, hoist_loops
 from .memory import remove_overwritten_stores
 from .ranges import entry_intervals, interval, reduce_division, update as update_interval
 from .registers import compact_registers
+from .summations import lower_summation
+from .schedule import schedule_blocks
 
 
 PURE = BINARY.keys() | {"const", "mov", "select", "mac", "addsh"}
@@ -453,6 +455,17 @@ def render(source, edits, layout=None, label_lines=None, placement=None, expansi
     return "".join(parts)
 
 
+def render_canonical(program, blocks, order, expansions):
+    params = ", ".join(f"v{register}" for register in program.params)
+    lines = [f"func {program.name}({params})"]
+    for label in order:
+        lines.append(f"{label}:")
+        for instruction in blocks[label]:
+            for item in expansions.get(instruction.line, (instruction,)):
+                lines.append(f"{item}:" if isinstance(item, str) else "  " + format_instruction(item))
+    return "\n".join(lines) + "\n"
+
+
 def optimize(program, source, machine, profile=None):
     edits = {}
     registers = set(program.params)
@@ -494,6 +507,21 @@ def optimize(program, source, machine, profile=None):
         remove_unreachable_blocks(blocks, program, edits)
     placement.update(hoist_loops(blocks, PURE))
     live_in = remove_dead_code(blocks, edits, machine, may_spill, safe_memory)
+    retained = {
+        label: [current for instruction in block
+                if (current := edits.get(instruction.line, instruction)) is not None]
+        for label, block in blocks.items()
+    }
+    summed = lower_summation(retained, machine, max(ins.line for ins in program.instrs) + 1)
+    if summed is not None:
+        blocks = retained
+        for instruction in blocks[summed]:
+            edits[instruction.line] = instruction
+        facts = intervals.get(summed, {}).copy() if use_intervals else None
+        blocks[summed] = simplify_block(blocks[summed], machine, edits, shared_registers,
+                                        may_spill, facts, safe_memory)
+        remove_unreachable_blocks(blocks, program, edits)
+        live_in = remove_dead_code(blocks, edits, machine, may_spill, safe_memory)
     if may_spill and live_in is not None:
         compact_registers(blocks, edits, live_in, program.params, machine)
     layout = choose_layout(blocks, edits, machine, profile)
@@ -509,7 +537,10 @@ def optimize(program, source, machine, profile=None):
     if merge_straight_lines(blocks, edits, program.label_lines, layout or list(blocks)):
         if layout:
             layout = [label for label in layout if label in blocks]
+    scheduled = schedule_blocks(blocks, layout or list(blocks), program.params, machine)
     expansions = double_loops(blocks, layout or list(blocks), machine)
+    if summed is not None or scheduled:
+        return render_canonical(program, blocks, layout or list(blocks), expansions)
     if edits or layout or placement or expansions:
         return render(source, edits, layout, program.label_lines, placement, expansions)
     return None

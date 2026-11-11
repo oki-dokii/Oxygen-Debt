@@ -30,6 +30,19 @@ for machine in machine_default machine_no_fused; do
     python3 "$kit/ksim" optimized.kir --machine "$config" --input sum_sq.in
 done
 
+for name in collatz matmul4; do
+    printf '\n=== %s: specialization or scheduling ===\n' "$name"
+    cp "$kit/bench/$name.kir" "$kit/bench/$name.in" .
+    config="$kit/machines/machine_default.cfg"
+    "$repo/kopt" "$name.kir" --machine "$config" -o "$name.optimized.kir"
+    python3 "$kit/kvalidate" "$name.kir" --machine "$config"
+    python3 "$kit/kvalidate" "$name.optimized.kir" --against "$name.kir" --machine "$config"
+    printf '\nOriginal result and cycles\n'
+    python3 "$kit/ksim" "$name.kir" --machine "$config" --input "$name.in"
+    printf '\nOptimized result and cycles\n'
+    python3 "$kit/ksim" "$name.optimized.kir" --machine "$config" --input "$name.in"
+done
+
 printf '\n=== Stores before a division trap ===\n'
 cp "$kit/bench/store_then_div_trap.kir" .
 printf 'args 100 0\n' > divide_by_zero.in

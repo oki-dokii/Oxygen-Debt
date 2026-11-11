@@ -32,3 +32,6 @@ jobs:
           sh tests/demo.sh "$kit"
           python3 tests/benchmark.py "$kit" --random 64 --seed 832719
           python3 tests/stress.py "$kit"
+          python3 tests/summations.py "$kit"
+          python3 tests/finite.py "$kit"
+          python3 tests/scheduling.py "$kit"

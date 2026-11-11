@@ -11,6 +11,7 @@ sys.dont_write_bytecode = True
 from src.kirlib import KirError, check_machine_features, decode_text, load_machine, parse_program
 from src.layout import load_profile
 from src.optimizer import optimize
+from src.finite import specialize
 
 
 def main():
@@ -28,6 +29,9 @@ def main():
         machine = load_machine(args.machine)
         check_machine_features(program, machine)
         optimized = optimize(program, source, machine, load_profile(args.profile))
+        finite = specialize(parse_program(optimized) if optimized is not None else program, machine)
+        if finite is not None:
+            optimized = finite
         args.output.write_bytes(original if optimized is None else optimized.encode("utf-8"))
     except (KirError, OSError, ValueError) as error:
         print(f"kopt: {error}", file=sys.stderr)

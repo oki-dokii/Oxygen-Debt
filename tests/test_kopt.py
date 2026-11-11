@@ -3,6 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from src.kirlib import parse_program
+
 
 KOPT = Path(__file__).resolve().parents[1] / "kopt"
 MACHINE = """\
@@ -25,6 +27,17 @@ fused_addsh = 0
 
 
 class KoptTests(unittest.TestCase):
+    def assert_same_block_instructions(self, actual, expected):
+        """Allow scheduling and canonical formatting while checking retained operations."""
+        before, after = (parse_program(value.decode()) for value in (expected, actual))
+        self.assertEqual(after.params, before.params)
+        self.assertEqual(after.block_labels, before.block_labels)
+        for label in before.block_labels:
+            self.assertCountEqual(
+                [(ins.op, ins.args) for ins, owner in zip(after.instrs, after.block_of) if owner == label],
+                [(ins.op, ins.args) for ins, owner in zip(before.instrs, before.block_of) if owner == label],
+            )
+
     def run_kopt(self, source, machine=MACHINE, extra_args=(), profile=None):
         with tempfile.TemporaryDirectory() as directory:
             work = Path(directory)
@@ -57,7 +70,7 @@ class KoptTests(unittest.TestCase):
         )
         result, output = self.run_kopt(source, extra_args=("--profile", "unused.prof"))
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(
+        self.assert_same_block_instructions(
             output,
             source.replace(b"  const v1, 10\r\n", b"").replace(b"  const v3, 9\r\n", b"")
             .replace(b"  jmp finish\r\nfinish:\r\n", b"")
@@ -175,7 +188,7 @@ class KoptTests(unittest.TestCase):
         machine = MACHINE.replace("lat_alu = 1", "lat_alu = 5")
         result, output = self.run_kopt(source, machine=machine)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(output, source)
+        self.assert_same_block_instructions(output, source)
 
     def test_loop_hoisting_moves_arithmetic_and_keeps_trapping_load_in_body(self):
         chain = b"  mul v2, v1, 3 ; invariant\r\n  add v3, v2, 2\r\n"
@@ -187,7 +200,8 @@ class KoptTests(unittest.TestCase):
         )
         result, output = self.run_kopt(source)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(output, source.replace(chain, b"").replace(b"  jmp head", chain + b"  jmp head", 1))
+        self.assert_same_block_instructions(
+            output, source.replace(chain, b"").replace(b"  jmp head", chain + b"  jmp head", 1))
 
     def test_loop_hoisting_preserves_value_on_zero_iterations(self):
         source = (

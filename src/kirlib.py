@@ -1,7 +1,8 @@
 """KIR parser and machine loader adapted from the official COMP10 starter kit.
 
 Source: rudra-shroff06/LLH-26, commit d23ac1d865df4cdacf7ad8e9fff3e1d560761c46.
-The interpreter and timing model stay in the separate validation kit.
+The permitted interpreter and timing model are adapted separately in src/kiln.py.
+Validation uses an independent, unmodified external checkout of the kit.
 """
 import re
 
