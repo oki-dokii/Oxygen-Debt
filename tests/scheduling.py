@@ -31,13 +31,15 @@ def main():
     rng = random.Random(924812)
     outcomes = Counter()
     changed = 0
+    reordered_outcomes = Counter()
+    loop_changes = 0
     with tempfile.TemporaryDirectory(prefix="oxygen-schedule-") as directory:
         original_path, optimized_path = (Path(directory) / name for name in ("in.kir", "out.kir"))
-        for case in range(200):
+        for case in range(232):
             lines = ["func kernel(v0, v1)", "entry:"]
             # Independent work following a long operation creates useful scheduling choices.
             lines += ["  mul v2, v0, v1", "  add v3, v2, 7", "  xor v4, v0, v1"]
-            for _ in range(30):
+            for _ in range(24):
                 dest = f"v{rng.randrange(7)}"
                 left = f"v{rng.randrange(7)}"
                 right = f"v{rng.randrange(7)}" if rng.randrange(2) else str(rng.choice([0, 1, 3, 31, 32, -1]))
@@ -58,6 +60,26 @@ def main():
                 lines = ["func kernel(v0, v1)", "entry:", "  mul v2, v0, v1",
                          f"  add v3, v2, {case + 1}", "  mul v4, v0, v1",
                          "  add v5, v4, 3", "  add v6, v3, v5", "  ret v6"]
+            if case >= 200:
+                blocks = {
+                    "entry": ["and v0, v0, 15", "const v6, 0", "const v7, 0", "jmp head"],
+                    "head": ["lt v8, v7, v0", "br v8, first, done"],
+                    "first": ["mul v2, v1, 3", "add v3, v2, 7", "mul v4, v1, 5",
+                              "add v5, v4, 11", "xor v3, v3, v5", "jmp second"],
+                    "second": ["add v6, v6, v3", "add v7, v7, 1", "store 0, v6", "jmp head"],
+                    "done": ["ret v6"],
+                }
+                if case % 4 == 0:
+                    blocks["second"].insert(2, "div v3, v6, v1")
+                if case % 4 == 1:
+                    blocks["second"].insert(2, "load v3, v1")
+                if case % 4 == 2:
+                    blocks["second"].insert(2, "vstore 7, v6")
+                labels = ["head", "first", "second", "done"]
+                rng.shuffle(labels)
+                lines = ["func kernel(v0, v1)"]
+                for label in ["entry", *labels]:
+                    lines += [f"{label}:", *["  " + ins for ins in blocks[label]]]
             source = "\n".join(lines) + "\n"
             original_path.write_text(source)
             original = reference.compile_program(reference.load_program(original_path))
@@ -67,12 +89,15 @@ def main():
                           for values in inputs]
             for name, machine in machines.items():
                 program = parse_program(source)
-                blocks = {"entry": program.instrs[:]}
-                selected = schedule_blocks(blocks, ["entry"], program.params, machine)
+                starts = [program.labels[label] for label in program.block_labels]
+                blocks = {label: program.instrs[start:end] for label, start, end in zip(
+                    program.block_labels, starts, [*starts[1:], len(program.instrs)])}
+                selected = schedule_blocks(blocks, program.block_labels, program.params, machine)
                 changed += selected
-                if case >= 20 and case % 10 == 0 and selected:
+                loop_changes += selected and case >= 200
+                if 20 <= case < 200 and case % 10 == 0 and selected:
                     raise RuntimeError("volatile block was scheduled")
-                optimized_path.write_text(render_canonical(program, blocks, ["entry"], {}))
+                optimized_path.write_text(render_canonical(program, blocks, program.block_labels, {}))
                 parsed = reference.load_program(optimized_path)
                 reference.check_machine_features(parsed, machine)
                 optimized = reference.compile_program(parsed)
@@ -81,11 +106,17 @@ def main():
                     difference = reference.first_difference(before, after)
                     if difference:
                         raise RuntimeError(f"case {case}, {name}, {values}: {difference}\n{source}")
-                    outcomes[before.status if before.status == "RET" else before.value] += 1
-    if not changed:
-        raise RuntimeError("no schedule changed")
-    print(f"200 scheduling cases × {len(machines)} machines: {sum(outcomes.values()):,} matches, "
-          f"{changed} reordered pairs; {dict(outcomes)}")
+                    outcome = before.status if before.status == "RET" else before.value
+                    if outcome.startswith("explicit("):
+                        outcome = "explicit_trap"
+                    outcomes[outcome] += 1
+                    if selected:
+                        reordered_outcomes[outcome] += 1
+    if not loop_changes or not reordered_outcomes["div_by_zero"] or not reordered_outcomes["bad_address"]:
+        raise RuntimeError("scheduling did not exercise loops and both implicit trap kinds")
+    print(f"232 scheduling cases × {len(machines)} machines: {sum(outcomes.values()):,} matches, "
+          f"{changed} reordered pairs ({loop_changes} loop pairs); {dict(outcomes)}; "
+          f"outcomes with actual reordering: {dict(reordered_outcomes)}")
     return 0
 
 

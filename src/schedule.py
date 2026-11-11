@@ -10,6 +10,53 @@ EFFECTS = {"load", "store", "div", "mod", "vload", "vstore", "trap"}
 FIELDS = ("srcs", "dst", "touch", "opnames", "isterm", "ismem")
 
 
+def spill_contexts(label, predecessors, successors, indices):
+    """Bound all short incoming/outgoing contexts and simple cycles through a block."""
+    def walks(edges, backward=False):
+        pending = [(label,)]
+        finished = []
+        while pending:
+            path = pending.pop(0)
+            neighbors = edges[path[0] if backward else path[-1]]
+            if len(path) == 4 or not neighbors:
+                finished.append(path)
+            else:
+                pending.extend((neighbor, *path) if backward else (*path, neighbor)
+                               for neighbor in neighbors)
+            if len(pending) + len(finished) > 8:
+                return None
+        return finished
+
+    incoming, outgoing = walks(predecessors, True), walks(successors)
+    if incoming is None or outgoing is None:
+        return None
+    paths = [before[:-1] + after for before in incoming for after in outgoing]
+    pending = [(label,)]
+    cycles = []
+    visits = 0
+    while pending:
+        path = pending.pop()
+        visits += 1
+        if visits > 256 or len(cycles) > 8:
+            return None
+        for target in successors[path[-1]]:
+            if target == label:
+                cycles.append(path)
+                if len(cycles) > 8:
+                    return None
+            elif target not in path and len(path) < 6:
+                pending.append((*path, target))
+    for cycle in cycles:
+        paths.extend(before[:-1] + cycle * 3 + after
+                     for before in incoming for after in outgoing)
+        if len(paths) > 128:
+            return None
+    paths = list(dict.fromkeys(paths))
+    if any(sum(len(indices[block]) for block in path) > 512 for path in paths):
+        return None
+    return paths
+
+
 def scheduled_order(block, machine):
     work = block[:-1]
     if not 3 <= len(work) <= 32 or any(ins.op in {"vload", "vstore"} for ins in work):
@@ -99,9 +146,8 @@ def schedule_blocks(blocks, order, params, machine):
         for target in successors[label]:
             predecessors[target].append(label)
     model = compile_program(program)
-    # Short paths do not model the LRU state carried around larger spilling loops.
-    if model.nregs > machine["registers"] and machine["reg_spill_penalty"]:
-        return False
+    spilling = model.nregs > machine["registers"] and machine["reg_spill_penalty"]
+    budget = 200_000
     changed = False
     for label in order:
         permutation = scheduled_order(blocks[label], machine)
@@ -122,6 +168,15 @@ def schedule_blocks(blocks, order, params, machine):
                 paths.append((before, label) * 3)
         for after in successors[label]:
             paths.append((label, after))
+        if spilling:
+            contexts = spill_contexts(label, predecessors, successors, indices)
+            if contexts is None:
+                continue
+            paths.extend(contexts)
+            work = 2 * sum(len(model.opnames) + sum(len(indices[b]) for b in path) for path in paths)
+            if work > budget:
+                continue
+            budget -= work
         faster = False
         for path in paths:
             trace = [pc for block in path for pc in indices[block]]
