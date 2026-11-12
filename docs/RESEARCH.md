@@ -36,7 +36,7 @@ The second repository's default-machine original total is 103,671, matching the 
 
 ## Implemented strategies and reasoning
 
-On 2026-11-12 we implemented three general strategies independently: symbolic polynomial recurrence recognition, complete finite-domain specialization, and dependency scheduling. The local default total is now 16,645 cycles; that remains above the other implementation's unverified reported 8,700. Do not present this as a head-to-head result or a winning guarantee.
+On 2026-11-12 we implemented three general strategies independently: symbolic polynomial recurrence recognition, complete finite-domain specialization, and dependency scheduling. The local default total at the comparison revision was 16,645 cycles; that remains above the other implementation's unverified reported 8,700. Do not present this as a head-to-head result or a winning guarantee.
 
 For sums over `i=0..n-1`, use `sum(1)=n`, `sum(i)=n(n-1)/2`, `sum(i²)=n(n-1)(2n-1)/6`, and `sum(i³)=[n(n-1)/2]²`. These identities can be checked by taking the difference at `n+1` and `n`, plus the zero base case. Bound analysis justifies intermediate signed divisions; multiplication by the inverse of three modulo 2³² handles an exact division after halving. The implementation derives coefficients from the body rather than recognizing sample syntax. Additional proof conditions for signed remainder are recorded in [DESIGN](../DESIGN.md).
 
@@ -47,3 +47,7 @@ Scheduling preserves mutable-register dependencies and serializes potentially tr
 ## Updated public comparison — 2026-11-12
 
 [Full comparison](COMPARISON.md) pins both peers, compares all 500 published C++ result rows with our verified `040642d` results, and records architectural and testing differences. Our five-machine total is 109,416 versus ROCA's reported 163,533 and the C++ entry's reported 52,130. Against the latter's published rows, we win 26 pairs, tie 39 and lose 435. These are comparisons with author-reported data, not independently reproduced competitor runs. The most substantial remaining gaps include global loop/memory work, bit-operation synthesis, allocation and a broader candidate portfolio.
+
+## Rolling memory implementation — 2026-11-12
+
+Implemented source-derived affine load/store forwarding across a single counting loop, independently of competitor code. The invariant is that a carry holds the next target address's last established memory value. Initial bounds and alias checks cover the base case and induction step. Safe transformation and profitability remain separate: original stores/traps stay in place, while structural timing paths and machine-capacity checks decide whether to emit a candidate. The first performance experiment exposed an interaction with loop doubling; preserving those existing plans removed the public regressions. See [DESIGN](../DESIGN.md) and D-026. The five-machine total is now 108,965 cycles (default 16,565), with 11 improved public pairs and no regressions against the comparison revision. The earlier [public comparison](COMPARISON.md) remains a pinned historical comparison, not a measurement of this new revision.

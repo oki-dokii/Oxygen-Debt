@@ -12,6 +12,7 @@ from .ranges import entry_intervals, interval, reduce_division, update as update
 from .registers import compact_registers
 from .summations import lower_summation
 from .schedule import schedule_blocks
+from .rolling import reuse_loop_loads
 
 
 PURE = BINARY.keys() | {"const", "mov", "select", "mac", "addsh"}
@@ -537,9 +538,10 @@ def optimize(program, source, machine, profile=None):
     if merge_straight_lines(blocks, edits, program.label_lines, layout or list(blocks)):
         if layout:
             layout = [label for label in layout if label in blocks]
+    rolling = reuse_loop_loads(blocks, layout or list(blocks), program.params, machine, PURE)
     scheduled = schedule_blocks(blocks, layout or list(blocks), program.params, machine)
     expansions = double_loops(blocks, layout or list(blocks), machine)
-    if summed is not None or scheduled:
+    if summed is not None or scheduled or rolling:
         return render_canonical(program, blocks, layout or list(blocks), expansions)
     if edits or layout or placement or expansions:
         return render(source, edits, layout, program.label_lines, placement, expansions)

@@ -35,3 +35,4 @@ jobs:
           python3 tests/summations.py "$kit"
           python3 tests/finite.py "$kit"
           python3 tests/scheduling.py "$kit"
+          python3 tests/rolling.py "$kit"

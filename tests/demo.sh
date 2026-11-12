@@ -30,8 +30,8 @@ for machine in machine_default machine_no_fused; do
     python3 "$kit/ksim" optimized.kir --machine "$config" --input sum_sq.in
 done
 
-for name in collatz matmul4; do
-    printf '\n=== %s: specialization or scheduling ===\n' "$name"
+for name in collatz matmul4 stencil3; do
+    printf '\n=== %s on machine_default ===\n' "$name"
     cp "$kit/bench/$name.kir" "$kit/bench/$name.in" .
     config="$kit/machines/machine_default.cfg"
     "$repo/kopt" "$name.kir" --machine "$config" -o "$name.optimized.kir"

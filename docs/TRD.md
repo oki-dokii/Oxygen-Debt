@@ -9,9 +9,11 @@ flowchart LR
     C --> D["Simplify branches and remove unreachable blocks"]
     D --> E["Compute liveness and remove dead pure instructions"]
     E --> S["Prove bounded polynomial recurrences"]
-    S --> F["Reuse registers, lay out and schedule blocks"]
+    S --> F["Reuse registers and lay out blocks"]
     P["Optional edge counts"] --> F
-    F --> Q["Prove and exhaustively specialize finite domains"]
+    F --> R["Prove cross-iteration load/store reuse"]
+    R --> T["Schedule blocks and double short loops"]
+    T --> Q["Prove and exhaustively specialize finite domains"]
     Q --> G["Emit valid KIR"]
     G --> H["Offline validation and cycle measurement"]
 ```
@@ -34,6 +36,7 @@ flowchart LR
 | Register reuse | Assign a shared pool of register names to block-local definitions after liveness and fusion. Use the machine's register count and estimate reloads on short cycles that could still spill. | Reserve parameters, registers live at block boundaries, and registers used by volatile I/O. Read operands before freeing their names for new definitions. |
 | Polynomial summations | Symbolically derive `a + p(i)` of degree at most three and emit bounded closed forms. | Require index zero, stride one, invariant bound 0–255, sole-entry body and return-only exit. Reject effects and unsupported carried state; prove additional signed bounds before moving a final modulus. |
 | Scheduling | Greedily reorder blocks of at most 32 operations using register dependencies and critical paths, then compare modeled short paths. | Preserve RAW/WAR/WAW edges and effect order, keep terminators last, skip volatile blocks. For spilling programs, require bounded incoming/outgoing and repeated-cycle contexts to pass too; skip context explosion or budget exhaustion. |
+| Rolling memory reuse | Track affine addresses through a bounded counting body and carry a later successful access into the next iteration. | Prove stride/address identity, initial preload bounds, and absence of aliasing stores before the load and after its supplier. Preserve effects; reject volatile bodies and added spills. |
 | Finite specialization | Prove at most ten original input bits affect a pure function, evaluate the entire domain, and compare decision-tree and packed-literal candidates. | Reject memory, multiple read parameters, unmasked original reads, any trapping or nonreturning representative, and budget exhaustion. Exhaustively verify generated candidates. |
 
 Keep the local passes linear in the number of instructions where practical. Avoid tables indexed by the largest register number and full scans for each individual rewrite. Use stable iteration order and a deterministic work budget for optional expensive analyses. The original input is a fallback when it is valid for the selected machine. Handle unsupported fused opcodes deliberately if the input contract requires lowering them, and document the behavior before relying on that path.
