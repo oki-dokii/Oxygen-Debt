@@ -30,7 +30,7 @@ for machine in machine_default machine_no_fused; do
     python3 "$kit/ksim" optimized.kir --machine "$config" --input sum_sq.in
 done
 
-for name in collatz matmul4 stencil3 popcount bit_reverse crc_bitwise nested_invariant; do
+for name in collatz matmul4 stencil3 popcount bit_reverse crc_bitwise nested_invariant adler32 fletcher16; do
     printf '\n=== %s on machine_default ===\n' "$name"
     cp "$kit/bench/$name.kir" "$kit/bench/$name.in" .
     config="$kit/machines/machine_default.cfg"

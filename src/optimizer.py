@@ -16,6 +16,7 @@ from .rolling import reuse_loop_loads
 from .bitloops import synthesize as synthesize_bits
 from .nested import hoist_nested
 from .linear_loops import collapse as collapse_linear
+from .modulo import defer_moduli
 
 
 PURE = BINARY.keys() | {"const", "mov", "select", "mac", "addsh"}
@@ -531,7 +532,11 @@ def optimize(program, source, machine, profile=None, options=frozenset()):
                 summed = collapsed
     if bits is not None and summed is None:
         summed = bits
-    if summed is not None:
+    deferred = defer_moduli(retained, PURE) if "defer_mod" in options else set()
+    if deferred:
+        anchors.update(deferred)
+        intervals = entry_intervals(retained)
+    if summed is not None or deferred:
         blocks = retained
         for block in blocks.values():
             for instruction in block:
@@ -560,7 +565,7 @@ def optimize(program, source, machine, profile=None, options=frozenset()):
     rolling = "no_memory" not in options and reuse_loop_loads(blocks, layout or list(blocks), program.params, machine, PURE)
     scheduled = "no_schedule" not in options and schedule_blocks(blocks, layout or list(blocks), program.params, machine)
     expansions = {} if "no_unroll" in options else double_loops(blocks, layout or list(blocks), machine)
-    if summed is not None or scheduled or rolling:
+    if summed is not None or scheduled or rolling or deferred:
         return render_canonical(program, blocks, layout or list(blocks), expansions)
     if edits or layout or placement or expansions:
         return render(source, edits, layout, program.label_lines, placement, expansions)
