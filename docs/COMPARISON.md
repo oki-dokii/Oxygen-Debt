@@ -6,7 +6,7 @@ This compares our externally validated practice results with public author repor
 
 | Entry | Revision | Evidence |
 |---|---|---|
-| Oxygen Debt | This release; exact code revision and Ubuntu run recorded in WORKFLOW | Independent organizer-kit runner, local generated suites and release CI |
+| Oxygen Debt | `8eb95bf43683c20f0b273c62fb82dec34e3eb5db` | [Verified Ubuntu run](https://github.com/oki-dokii/Oxygen-Debt/actions/runs/43187901160), independent kit runner and generated suites |
 | COMP10_ROKACODE | `1485b298f36e8027cd7c332949933af5b6001c7a` — unchanged when re-fetched | Current README and benchmark report |
 | kopt-kiln-optimizer | `761489fe765ee9a6960da8cf58f9aa716d783ef8` — updated since the previous comparison | Refreshed README and boost2 benchmark report |
 
