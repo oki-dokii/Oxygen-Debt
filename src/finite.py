@@ -4,7 +4,8 @@ from .kiln import compile_program, execute, time_trace
 from .kirlib import SIGS, parse_program
 
 EVALUATION_BUDGET = 2_000_000
-MAX_BITS = 10
+MAX_BITS = 12
+COST_BUDGET = 2_000_000
 
 
 def masked_parameter(program):
@@ -13,41 +14,37 @@ def masked_parameter(program):
         value for ins in program.instrs for kind, (operand, value) in zip(SIGS[ins.op], ins.args)
         if kind == "s" and operand == "r" and value in parameters
     }
-    if len(used) != 1:
+    if not 1 <= len(used) <= 2:
         return None
-    parameter = next(iter(used))
     entry_end = (program.labels[program.block_labels[1]]
                  if len(program.block_labels) > 1 else len(program.instrs))
-    raw = True
-    mask = 0
+    raw = set(used)
+    masks = dict.fromkeys(sorted(used), 0)
     for instruction in program.instrs[:entry_end]:
-        if not raw:
-            break
         reads = [operand for kind, operand in zip(SIGS[instruction.op], instruction.args) if kind == "s"]
-        if ("r", parameter) in reads:
-            if instruction.op != "and":
-                return None
-            left, right = instruction.args[1:]
-            other = right if left == ("r", parameter) else left
-            if other[0] != "i":
-                return None
-            mask |= other[1]
-        if SIGS[instruction.op].startswith("d") and instruction.args[0] == ("r", parameter):
-            raw = False
-    if raw and any(
-        kind == "s" and operand == ("r", parameter)
-        for ins in program.instrs[entry_end:] for kind, operand in zip(SIGS[ins.op], ins.args)
-    ):
+        for parameter in sorted(raw):
+            if ("r", parameter) in reads:
+                if instruction.op != "and":
+                    return None
+                left, right = instruction.args[1:]
+                other = right if left == ("r", parameter) else left
+                if other[0] != "i":
+                    return None
+                masks[parameter] |= other[1]
+        if SIGS[instruction.op].startswith("d"):
+            raw.discard(instruction.args[0][1])
+    if any(kind == "s" and operand[0] == "r" and operand[1] in raw
+           for ins in program.instrs[entry_end:] for kind, operand in zip(SIGS[ins.op], ins.args)):
         return None
-    if mask.bit_count() > MAX_BITS:
-        return None
-    return parameter, [bit for bit in range(32) if mask & (1 << bit)]
+    positions = [(register, bit) for register, mask in masks.items() for bit in range(32) if mask & (1 << bit)]
+    return positions if len(positions) <= MAX_BITS else None
 
 
-def lookup_source(program, parameter, positions, outputs, packed):
+def lookup_source(program, positions, outputs, packed):
     width = max(1, max(outputs).bit_length())
     group_bits = min(len(positions), (32 // width).bit_length() - 1) if packed else 0
-    if positions[:group_bits] != list(range(group_bits)):
+    parameter = positions[0][0] if positions else program.params[0]
+    if positions[:group_bits] != [(parameter, bit) for bit in range(group_bits)]:
         group_bits = 0
     size = 1 << group_bits
     words = [
@@ -98,9 +95,9 @@ def lookup_source(program, parameter, positions, outputs, packed):
             else:
                 lines.append(f"  ret {entry[1]}")
             return
-        _, bit, yes, no = entry
+        _, (register, bit), yes, no = entry
         target = lambda n: "finite_entry" if n == root else f"finite_{n}"
-        lines.extend((f"  and {condition}, v{parameter}, {1 << bit}",
+        lines.extend((f"  and {condition}, v{register}, {1 << bit}",
                       f"  br {condition}, {target(yes)}, {target(no)}"))
         emit(no)
         emit(yes)
@@ -117,38 +114,49 @@ def specialize(program, machine):
     proved = masked_parameter(program)
     if proved is None:
         return None
-    parameter, positions = proved
+    positions = proved
     original = compile_program(program)
-    representatives = [
-        sum(((number >> index) & 1) << bit for index, bit in enumerate(positions))
-        for number in range(1 << len(positions))
-    ]
+    representatives = []
+    for number in range(1 << len(positions)):
+        words = dict.fromkeys(program.params, 0)
+        for index, (register, bit) in enumerate(positions):
+            words[register] |= ((number >> index) & 1) << bit
+        representatives.append([words[register] for register in program.params])
     budget = EVALUATION_BUDGET
     outputs = []
     inputs = []
     best_score = 1
-    for word in representatives:
-        args = [word if register == parameter else 0 for register in program.params]
+    cost_budget = COST_BUDGET
+    for args in representatives:
         run = execute(original, args, [], {}, min(20_000, budget), want_trace=True)
         budget -= run.steps
         if run.status != "RET" or budget <= 0:
             return None
         outputs.append(run.value)
         inputs.append(args)
+        cost_budget -= len(original.code) + len(run.trace)
+        if cost_budget < 0:
+            return None
         best_score *= time_trace(original, run.trace, machine)
     best = None
     tested = set()
     for packed in (False, True):
-        source = lookup_source(program, parameter, positions, outputs, packed)
+        source = lookup_source(program, positions, outputs, packed)
         if source in tested:
             continue
         tested.add(source)
-        candidate = compile_program(parse_program(source))
+        parsed = parse_program(source)
+        if len(parsed.instrs) > 4096 or len(parsed.instrs) * len(inputs) > cost_budget:
+            continue
+        candidate = compile_program(parsed)
         score = 1
         for args, expected in zip(inputs, outputs):
             run = execute(candidate, args, [], {}, 1000, want_trace=True)
             if run.status != "RET" or run.value != expected:
                 raise ValueError("finite specialization failed its exhaustive check")
+            cost_budget -= len(candidate.code) + len(run.trace)
+            if cost_budget < 0:
+                return best
             score *= time_trace(candidate, run.trace, machine)
         if score < best_score:
             best_score = score

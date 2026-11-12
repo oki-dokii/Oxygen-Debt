@@ -13,6 +13,9 @@ from .registers import compact_registers
 from .summations import lower_summation
 from .schedule import schedule_blocks
 from .rolling import reuse_loop_loads
+from .bitloops import synthesize as synthesize_bits
+from .nested import hoist_nested
+from .linear_loops import collapse as collapse_linear
 
 
 PURE = BINARY.keys() | {"const", "mov", "select", "mac", "addsh"}
@@ -467,7 +470,7 @@ def render_canonical(program, blocks, order, expansions):
     return "\n".join(lines) + "\n"
 
 
-def optimize(program, source, machine, profile=None):
+def optimize(program, source, machine, profile=None, options=frozenset()):
     edits = {}
     registers = set(program.params)
     read_blocks = {}
@@ -506,24 +509,40 @@ def optimize(program, source, machine, profile=None):
     placement = select_assignments(blocks, edits)
     if placement:
         remove_unreachable_blocks(blocks, program, edits)
-    placement.update(hoist_loops(blocks, PURE))
+    placement.update(hoist_nested(blocks, PURE) if "nested" in options else hoist_loops(blocks, PURE))
     live_in = remove_dead_code(blocks, edits, machine, may_spill, safe_memory)
     retained = {
         label: [current for instruction in block
                 if (current := edits.get(instruction.line, instruction)) is not None]
         for label, block in blocks.items()
     }
-    summed = lower_summation(retained, machine, max(ins.line for ins in program.instrs) + 1)
+    bits = synthesize_bits(retained, PURE)
+    summed = lower_summation(retained, machine, max(ins.line for block in retained.values() for ins in block) + 1)
+    anchors = {label for label in (bits, summed) if label is not None}
+    if "nested" in options:
+        for _ in range(4):
+            collapsed = collapse_linear(retained, PURE)
+            if collapsed is None:
+                break
+            anchors.add(collapsed)
+            remove_unreachable_blocks(retained, program, edits)
+            merge_straight_lines(retained, edits, program.label_lines, list(retained))
+            if summed is None:
+                summed = collapsed
+    if bits is not None and summed is None:
+        summed = bits
     if summed is not None:
         blocks = retained
-        for instruction in blocks[summed]:
-            edits[instruction.line] = instruction
-        facts = intervals.get(summed, {}).copy() if use_intervals else None
-        blocks[summed] = simplify_block(blocks[summed], machine, edits, shared_registers,
-                                        may_spill, facts, safe_memory)
+        for block in blocks.values():
+            for instruction in block:
+                edits[instruction.line] = instruction
+        for label in anchors & blocks.keys():
+            facts = intervals.get(label, {}).copy() if use_intervals else None
+            blocks[label] = simplify_block(blocks[label], machine, edits, shared_registers,
+                                           may_spill, facts, safe_memory)
         remove_unreachable_blocks(blocks, program, edits)
         live_in = remove_dead_code(blocks, edits, machine, may_spill, safe_memory)
-    if may_spill and live_in is not None:
+    if may_spill and live_in is not None and "no_alloc" not in options:
         compact_registers(blocks, edits, live_in, program.params, machine)
     layout = choose_layout(blocks, edits, machine, profile)
     blocks = {
@@ -538,9 +557,9 @@ def optimize(program, source, machine, profile=None):
     if merge_straight_lines(blocks, edits, program.label_lines, layout or list(blocks)):
         if layout:
             layout = [label for label in layout if label in blocks]
-    rolling = reuse_loop_loads(blocks, layout or list(blocks), program.params, machine, PURE)
-    scheduled = schedule_blocks(blocks, layout or list(blocks), program.params, machine)
-    expansions = double_loops(blocks, layout or list(blocks), machine)
+    rolling = "no_memory" not in options and reuse_loop_loads(blocks, layout or list(blocks), program.params, machine, PURE)
+    scheduled = "no_schedule" not in options and schedule_blocks(blocks, layout or list(blocks), program.params, machine)
+    expansions = {} if "no_unroll" in options else double_loops(blocks, layout or list(blocks), machine)
     if summed is not None or scheduled or rolling:
         return render_canonical(program, blocks, layout or list(blocks), expansions)
     if edits or layout or placement or expansions:

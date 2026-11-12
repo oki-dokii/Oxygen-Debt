@@ -1,77 +1,62 @@
-# Public submission comparison — 2026-11-12
+# Public submission comparison — refreshed 2026-11-12
 
-This is a comparison with public documentation and published result data, not an official leaderboard. Search found two other repositories implementing this exact COMP10 challenge. Private entries and unindexed repositories are not covered. A COMP01 self-hosting compiler and unrelated projects named Kiln were excluded.
+This compares our externally validated practice results with public author reports. It is not an official leaderboard; private entries and unindexed repositories are outside the search. Neither peer optimizer was built or executed, and no peer optimizer code was incorporated.
 
-## Revisions and evidence
+## Refreshed revisions
 
-| Entry | Revision | Evidence used |
+| Entry | Revision | Evidence |
 |---|---|---|
-| Oxygen Debt | `040642d` (code `d149226`) | Our external-kit runner and successful Ubuntu verification |
-| COMP10_ROKACODE | `1485b298f36e8027cd7c332949933af5b6001c7a` | Public README, DESIGN, and benchmark report |
-| kopt-kiln-optimizer | `1689c93ce8ae4629914aef090bf2a097e31b66c9` | Public README, DESIGN, BENCHMARKS, and 500-row sample-cycle JSON |
+| Oxygen Debt | This release; exact code revision and Ubuntu run recorded in WORKFLOW | Independent organizer-kit runner, local generated suites and release CI |
+| COMP10_ROKACODE | `1485b298f36e8027cd7c332949933af5b6001c7a` — unchanged when re-fetched | Current README and benchmark report |
+| kopt-kiln-optimizer | `761489fe765ee9a6960da8cf58f9aa716d783ef8` — updated since the previous comparison | Refreshed README and boost2 benchmark report |
 
-We did not build or execute the competitor optimizers. Their numbers and test outcomes remain author-reported. No competitor optimizer code was copied or incorporated. The peer documentation was fetched through GitHub's API because web search did not index all relevant pages.
+GitHub's API was used to re-fetch both main commits and READMEs. Our kit remains `d23ac1d865df4cdacf7ad8e9fff3e1d560761c46`. Public program names and reported unoptimized machine totals match, but competitor kit/input bytes have not been independently checked.
 
-Our results use organizer kit `d23ac1d865df4cdacf7ad8e9fff3e1d560761c46`, all 100 supplied programs, five supplied machines, and their sample inputs. The reported original totals match ours; this supports comparison but does not establish byte-identical kit revisions or input files for the competitors.
+## Current summed sample cycles
 
-## Sample-cycle comparison
+Lower is better. These are sums over 100 supplied sample inputs per machine, not a judging score or unseen-input prediction.
 
-Lower is better. These are sums of supplied sample cycles, not a judging score or a hidden-input prediction.
-
-| Machine | Oxygen Debt, independently measured | ROCA, reported | kopt-kiln-optimizer, reported |
+| Machine | Ours, measured | ROCA, reported | C++ peer, latest reported |
 |---|---:|---:|---:|
-| Default | 16,645 | Not broken down in its report | 8,700 |
-| Few registers | 31,190 | Not broken down in its report | 13,846 |
-| No fused | 19,070 | Not broken down in its report | 10,403 |
-| Slow memory | 25,703 | Not broken down in its report | 12,372 |
-| Wide/fast | 16,808 | Not broken down in its report | 6,809 |
-| All five | **109,416** | **163,533** | **52,130** |
+| Default | 15,063 | Not broken down | 8,529 |
+| Few registers | 27,890 | Not broken down | 13,589 |
+| No fused | 17,406 | Not broken down | 10,386 |
+| Slow memory | 23,899 | Not broken down | 11,993 |
+| Wide/fast | 14,766 | Not broken down | 6,625 |
+| All five | **99,024** | **163,533** | **51,122** |
 
-Our total is 33.1% lower than ROCA's published total. The C++ competitor's published total is 52.4% lower than ours: our sum is about 2.10 times theirs. Its default-machine sum is 47.7% lower than ours. These calculations compare our measurements with their claims; they are not an independently reproduced head-to-head benchmark.
+Our sum is 39.4% below ROCA's published sum. The latest C++ report is 48.4% below ours, so our sum is about 1.94 times its reported sum. This is a comparison against claims, not a reproduced head-to-head benchmark.
 
-The C++ repository's published JSON contains exactly 500 matching program/machine keys and sums to its README totals. Compared with those rows, our optimizer is faster in 26 pairs, ties 39, and is slower in 435. Its reported sample outputs are never slower than the original sample timings recorded by our runner; our sample outputs also have zero original-input regressions. Neither observation guarantees performance on a different input.
+The old 500-row matrix JSON still sums to 52,130; the available stream report is older too (default 8,973). Neither is the new 51,122-cycle boost2 report. Therefore the old 26-wins/39-ties/435-losses count is historical and must not be presented as a comparison against the latest peer. Current aggregate values come from the refreshed README/BENCHMARKS, whose boost2 table reports additional matrix-product recipes.
 
-| Default-machine example | Ours | C++ peer, reported |
+## What changed in our submission
+
+Default sample cycles versus the preceding release:
+
+| Kernel | Before | Now |
 |---|---:|---:|
-| collatz | **18** | 511 |
-| sum_sq | 13 | **8** |
-| matmul4 | 730 | **316** |
-| crc_bitwise | 854 | **250** |
-| nested_invariant | 447 | **16** |
-| adler32 | 555 | **126** |
-| bubble_sort | 920 | **515** |
+| popcount | 176 | **15** |
 | bit_reverse | 176 | **15** |
-| popcount | 176 | **14** |
+| crc_bitwise | 854 | **386** |
+| nested_invariant | 447 | **11** |
+| matmul4 | 730 | 730 |
+| adler32 | 555 | 555 |
 
-ROCA reports default `sum_sq` at 21 cycles and `matmul4` at 1,018, versus our 13 and 730. Our specialization produces strong wins on some bounded pure computations; the remaining gap spans many workloads.
+The strongest new gains follow structural proofs, not program names: SWAR counting, GF(2) synthesis, natural-loop invariants and additive nest collapse. Wider pure specialization now covers up to twelve bits over two parameters; array reads still reject, so this alone cannot specialize Adler or array CRC.
 
-## Architecture and validation
+Across all 500 sample pairs, 46 improve against the preceding release, 450 tie and four regress slightly: default stencil3 324→332; no-fused guarded_div 222→223; slow-memory prefix_sum 128→131; wide/fast count_above 198→213. The five-machine sum drops 108,965→99,024. No sample is slower than its unoptimized input. Candidate rankings use a fixed corpus and can favor different versions on other inputs.
 
-| Area | Oxygen Debt | ROCA documentation | C++ competitor documentation |
-|---|---|---|---|
-| Representation | Mutable KIR blocks, ranges, local values and liveness | Mutable blocks and greedy register coloring | SSA with global analyses and lowering |
-| Scheduling | Bounded dependency scheduling; additional spill contexts and a fixed timing budget | Not implemented | Forward, backward, pressure-aware and tree-ordering alternatives |
-| Registers | Local name reuse and short-cycle guards | Global greedy coloring | Multiple allocation/coalescing alternatives, rematerialization and guarded scratch spilling |
-| Loops and memory | Bounded polynomial formulas, hoisting, short doubling, local load reuse and safe store cleanup | Narrow square-sum and induction recognizers | Broader loop plans, unswitching, cross-iteration load reuse/pipelining, and matrix-related reuse |
-| Pure computations | Exhaustive specialization after proving at most ten masked bits | Narrow algebraic recognizers | Finite-domain proofs plus bit-demand and bit-affine alternatives |
-| Profiles | Edge-based block layout | Accepted but ignored | Profile-guided candidate ranking and layout |
-| Selection | Mostly one pass trajectory; limited formula/lookup alternatives | Mostly one pass trajectory | Broad deterministic candidate portfolio |
+## Architecture and evidence
 
-Our Ubuntu workflow reproduced the build, 42 unit tests, demo, 500 public pairs, 32,000 generated comparisons, 4,800 stress comparisons, and 222,400 targeted comparisons. A second local stress seed adds 4,800 comparisons, giving 264,000 generated comparisons locally. The scheduling suite now checks that changed programs actually exercise loops and traps. Its earlier oversized random blocks were outside the scheduler's limit; that coverage gap was corrected.
+Our mutable KIR pipeline now offers proof-based bit synthesis, bounded natural-loop LICM and additive collapse, two-parameter exhaustive specialization, and a small deterministic portfolio combining memory reuse, scheduling, allocation and unrolling choices. Profiles add bounded timing weights; they never authorize a transformation. The C++ documentation describes SSA/global analyses, a much wider candidate portfolio, stronger allocation/rematerialization/scratch choices, and broader memory/nest/matrix recipes. The remaining matrix/Adler gaps are consistent with that broader scope.
 
-ROCA reports 500 successful pairs with 100 additional randomized inputs, focused regressions, and 100,000-instruction / 1,000-live-register tests. The C++ report describes 3,000 fuzz programs, 500 metamorphic programs, sanitizer campaigns, generated transformation fixtures, and 1,200 unseen-machine checks. We have not reproduced these campaigns. Test counts and definitions differ, so the counts alone cannot rank correctness. We cannot claim stronger correctness coverage than the C++ entry on this evidence.
+Our added tests include alternate bit widths and CRC polynomials, nonlinearity/effect rejection, direct bit outputs, nested zero-trip and dominance cases, negative/wrapping additive coefficients, twelve-bit/two-input finite domains, and unselected nested candidates. A separate suite mutates every public source with register renaming, block shuffling, 96 actual constant changes, three new machines and wrong profiles, then checks repeated output across hash seeds. Reference step-limit skips are reported separately from matches. The release handoff records exact counts and Ubuntu evidence.
 
-## Priorities inferred from the gaps
-
-1. Improve global loop and memory optimization: induction/address simplification, provable cross-iteration load reuse, and broader invariant removal. `matmul4`, `sieve`, sorting and stencil kernels are useful independent test families.
-2. Add proven bit-operation and affine-expression synthesis for popcount, bit reversal and CRC-like workloads. Derive transformations from semantics and source structure, with independently generated tests.
-3. Explore a small deterministic candidate portfolio with register-pressure-aware allocation/scheduling. Retain unchanged candidates and measure on inputs separated from any profitability inputs.
-4. Expand end-to-end metamorphic checks: rename registers, shuffle blocks, vary constants, change machines, and provide misleading profiles across many complete programs.
-
-The reports suggest we are ahead of the narrower ROCA implementation in these sample totals and behind the strongest public implementation found. A winning claim requires independent reproduction and, ultimately, the organizers' unseen tests.
+The peer describes extensive fuzzing, metamorphic and sanitizer campaigns. Those claims were not rerun, and counts with different definitions do not rank correctness. Our current public score is stronger than before, but the available evidence still places the latest C++ report substantially ahead. No winning claim follows from these practice measurements.
 
 ## Sources
 
-- [Our successful Ubuntu run](https://github.com/oki-dokii/Oxygen-Debt/actions/runs/43081525052)
-- [ROCA README](https://github.com/RohitKattimani/COMP10_ROKACODE/blob/1485b298f36e8027cd7c332949933af5b6001c7a/README.md), [benchmark report](https://github.com/RohitKattimani/COMP10_ROKACODE/blob/1485b298f36e8027cd7c332949933af5b6001c7a/BENCHMARK_REPORT.md), [design](https://github.com/RohitKattimani/COMP10_ROKACODE/blob/1485b298f36e8027cd7c332949933af5b6001c7a/DESIGN.md)
-- [C++ README](https://github.com/wildwolf07/kopt-kiln-optimizer/blob/1689c93ce8ae4629914aef090bf2a097e31b66c9/README.md), [benchmark report](https://github.com/wildwolf07/kopt-kiln-optimizer/blob/1689c93ce8ae4629914aef090bf2a097e31b66c9/BENCHMARKS.md), [500-row sample results](https://github.com/wildwolf07/kopt-kiln-optimizer/blob/1689c93ce8ae4629914aef090bf2a097e31b66c9/results/matrix-sample-cycles.json), [design](https://github.com/wildwolf07/kopt-kiln-optimizer/blob/1689c93ce8ae4629914aef090bf2a097e31b66c9/DESIGN.md)
+- [Our latest handoff and CI evidence](WORKFLOW.md)
+- [ROCA README](https://github.com/RohitKattimani/COMP10_ROKACODE/blob/1485b298f36e8027cd7c332949933af5b6001c7a/README.md) and [benchmark report](https://github.com/RohitKattimani/COMP10_ROKACODE/blob/1485b298f36e8027cd7c332949933af5b6001c7a/BENCHMARK_REPORT.md)
+- [Latest C++ README](https://github.com/wildwolf07/kopt-kiln-optimizer/blob/761489fe765ee9a6960da8cf58f9aa716d783ef8/README.md) and [boost2 benchmark report](https://github.com/wildwolf07/kopt-kiln-optimizer/blob/761489fe765ee9a6960da8cf58f9aa716d783ef8/BENCHMARKS.md)
+- [Historical matrix data](https://github.com/wildwolf07/kopt-kiln-optimizer/blob/761489fe765ee9a6960da8cf58f9aa716d783ef8/results/matrix-sample-cycles.json), retained as older-stage evidence

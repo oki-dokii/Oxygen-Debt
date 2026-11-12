@@ -16,3 +16,5 @@ The competitive milestone now includes polynomial loop elimination, bounded depe
 Treat any semantic mismatch, invalid output, or timeout as a failed case. Track the number of programs improved, unchanged, or slower alongside cycle changes, and record optimizer runtime separately from simulated cycles. Publish measured results with the machine, input, and commit identified.
 
 The [SRS](SRS.md) defines release checks. The [workflow](WORKFLOW.md) defines what to run after each pass.
+
+The current scope also includes proved fixed-trip bit synthesis, natural-loop nesting/additive collapse, twelve-bit/two-parameter pure specialization, and bounded joint pass selection. Treat small timing regressions against a prior revision as measured tradeoffs, while semantic mismatches, invalid output and runtime-limit failures remain release blockers.

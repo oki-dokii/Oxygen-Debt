@@ -12,6 +12,7 @@ from src.kirlib import KirError, check_machine_features, decode_text, load_machi
 from src.layout import load_profile
 from src.optimizer import optimize
 from src.finite import specialize
+from src.candidates import select
 
 
 def main():
@@ -20,6 +21,7 @@ def main():
     parser.add_argument("--machine", type=Path, required=True)
     parser.add_argument("--profile", type=Path, help="optional branch counts for block layout")
     parser.add_argument("-o", dest="output", type=Path, required=True)
+    parser.add_argument("--no-search", action="store_true", help="disable whole-function candidate search; keep standard passes and finite specialization")
     args = parser.parse_args()
 
     try:
@@ -28,10 +30,19 @@ def main():
         program = parse_program(source)
         machine = load_machine(args.machine)
         check_machine_features(program, machine)
-        optimized = optimize(program, source, machine, load_profile(args.profile))
+        profile = load_profile(args.profile)
+        optimized = optimize(program, source, machine, profile)
+        candidates = [optimized] if optimized is not None else []
         finite = specialize(parse_program(optimized) if optimized is not None else program, machine)
         if finite is not None:
             optimized = finite
+            candidates.append(finite)
+        if not args.no_search and 4 < len(program.instrs) <= 500 and len(program.block_labels) > 1:
+            for options in (frozenset({"no_unroll"}), frozenset({"no_memory", "no_schedule", "no_alloc"}), frozenset({"nested"})):
+                candidate = optimize(parse_program(source), source, machine, profile, options)
+                if candidate is not None:
+                    candidates.append(candidate)
+            optimized = select(program, candidates, machine, profile)
         args.output.write_bytes(original if optimized is None else optimized.encode("utf-8"))
     except (KirError, OSError, ValueError) as error:
         print(f"kopt: {error}", file=sys.stderr)

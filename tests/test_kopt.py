@@ -47,7 +47,7 @@ class KoptTests(unittest.TestCase):
                 (work / "branch.prof").write_text(profile, encoding="utf-8")
                 extra_args = (*extra_args, "--profile", "branch.prof")
             result = subprocess.run(
-                [KOPT, "in.kir", "--machine", "machine.cfg", *extra_args, "-o", "out.kir"],
+                [KOPT, "in.kir", "--machine", "machine.cfg", "--no-search", *extra_args, "-o", "out.kir"],
                 cwd=work,
                 capture_output=True,
             )

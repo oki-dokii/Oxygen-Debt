@@ -8,7 +8,9 @@ For simple counting loops, `kopt` can carry a proved memory value into the next 
 
 Scheduling checks longer incoming/outgoing and repeated-cycle contexts when registers can spill, with deterministic limits that skip expensive candidates.
 
-It also proves closed forms for bounded polynomial summations, schedules independent instructions, and specializes pure functions with at most ten relevant masked input bits. Specialization evaluates every value in the proven domain during compilation; it never reads benchmark input files or uses stored answers. [Proofs and limits](DESIGN.md)
+It also proves closed forms for bounded polynomial summations, schedules independent instructions, and specializes pure functions with at most twelve relevant masked input bits across up to two parameters. Specialization evaluates every value in the proven domain during compilation; it never reads benchmark input files or uses stored answers. [Proofs and limits](DESIGN.md)
+
+Fixed-trip bit loops are proved with word expressions or GF(2) coefficients, enabling parallel population count, bit reflection and source-derived CRC maps. A bounded portfolio also tries nested-loop hoisting/additive collapse and different memory, unrolling, scheduling and allocation combinations. Profiles weight timing cases; they never justify a rewrite. `--no-search` disables the whole-function portfolio for pass diagnostics.
 
 Use Python 3.10 or later. Set `machine.cfg` to the path of a Kiln machine file, such as `machines/machine_default.cfg` from the official kit.
 
@@ -26,7 +28,7 @@ Run the public sample matrix with the organizer's COMP10 directory from a separa
 python3 tests/benchmark.py /path/to/LLH-26/Compilers/COMP10 --jobs 4
 ```
 
-Replay the demo with the same external kit. It shows `sum_sq` on machines with and without fusion, finite specialization on `collatz`, scheduling on `matmul4`, memory reuse on `stencil3`, and memory written before a division-by-zero trap.
+Replay the demo with the same external kit. It shows `sum_sq` on machines with and without fusion, finite specialization on `collatz`, scheduling on `matmul4`, memory reuse on `stencil3`, bit synthesis on population count/reversal/CRC, nested-loop collapse, and memory written before a division-by-zero trap.
 
 ```sh
 sh tests/demo.sh /path/to/LLH-26/Compilers/COMP10
@@ -42,19 +44,21 @@ python3 tests/summations.py /path/to/LLH-26/Compilers/COMP10
 python3 tests/finite.py /path/to/LLH-26/Compilers/COMP10
 python3 tests/scheduling.py /path/to/LLH-26/Compilers/COMP10
 python3 tests/rolling.py /path/to/LLH-26/Compilers/COMP10
+python3 tests/advanced.py /path/to/LLH-26/Compilers/COMP10
+python3 tests/metamorphic.py /path/to/LLH-26/Compilers/COMP10
 ```
 
 The 2026-11-12 local release run used organizer kit commit `d23ac1d` and all 100 supplied programs on five supplied machines. All 500 sample executions and 32,000 generated comparisons matched the independent organizer interpreter. These are summed sample cycles, not an official judging score or a prediction for unseen programs.
 
 | Machine | Original cycles | Optimized cycles |
 |---|---:|---:|
-| Default | 103,671 | 16,565 |
-| Few registers | 202,164 | 31,190 |
-| No fused instructions | 107,966 | 18,968 |
-| Slow memory | 111,254 | 25,462 |
-| Wide/fast | 55,744 | 16,780 |
+| Default | 103,671 | 15,063 |
+| Few registers | 202,164 | 27,890 |
+| No fused instructions | 107,966 | 17,406 |
+| Slow memory | 111,254 | 23,899 |
+| Wide/fast | 55,744 | 14,766 |
 
-The default sample timings include `sum_sq` at 13 cycles, `collatz` at 18, and `spill_storm` at 19. These names appear only in validation and documentation, never in optimizer recognition. No supplied sample slowed against either the unoptimized source or the revision before these three passes.
+The default sample timings include `sum_sq` at 13 cycles, `collatz` at 18, and `spill_storm` at 19. These names appear only in validation and documentation, never in optimizer recognition. No supplied sample is slower than its unoptimized source. Against the preceding release, 46 sample pairs improve, 450 tie and four slow slightly: candidate timing uses a fixed corpus, which can favor a different version on another input. Default popcount and bit_reverse are 15 cycles each, nested_invariant is 11, and crc_bitwise is 386.
 
 The parser and machine loader in `src/kirlib.py`, and execution and timing code in `src/kiln.py`, reuse permitted organizer code from the [pinned kit](https://github.com/rudra-shroff06/LLH-26/blob/d23ac1d865df4cdacf7ad8e9fff3e1d560761c46/Compilers/COMP10/kirlib.py). The optimizer passes and generated test suites are our implementation. Runtime requires only the Python standard library; the external kit is used for independent validation.
 
