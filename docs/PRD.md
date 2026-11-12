@@ -20,3 +20,5 @@ The [SRS](SRS.md) defines release checks. The [workflow](WORKFLOW.md) defines wh
 The current scope also includes proved fixed-trip bit synthesis, natural-loop nesting/additive collapse, twelve-bit/two-parameter pure specialization, and bounded joint pass selection. Treat small timing regressions against a prior revision as measured tradeoffs, while semantic mismatches, invalid output and runtime-limit failures remain release blockers.
 
 Checksum work adds a portfolio alternative that removes repeated positive-modulus reductions only after proving bounded unreduced arithmetic and exact restoration of externally used state, including zero-trip and trapping paths.
+
+Array-loop work adds bounded static-control expansion and successful-load caching for fixed source-derived nests. Correctness is independent of array contents; data-dependent branches conservatively reject.

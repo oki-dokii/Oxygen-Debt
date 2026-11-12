@@ -6,7 +6,7 @@ This compares our externally validated practice results with public author repor
 
 | Entry | Revision | Evidence |
 |---|---|---|
-| Oxygen Debt | `42b519eec9019c3abe0071be4e2be04890343513` | [Verified Ubuntu run](https://github.com/oki-dokii/Oxygen-Debt/actions/runs/43201225388), independent kit runner and generated suites |
+| Oxygen Debt | Array-loop release based on `dc78809`; final Ubuntu revision pending | Independent kit runner and generated suites; final Ubuntu verification pending |
 | COMP10_ROKACODE | `1485b298f36e8027cd7c332949933af5b6001c7a` — unchanged when re-fetched | Current README and benchmark report |
 | kopt-kiln-optimizer | `761489fe765ee9a6960da8cf58f9aa716d783ef8` — updated since the previous comparison | Refreshed README and boost2 benchmark report |
 
@@ -18,14 +18,14 @@ Lower is better. These are sums over 100 supplied sample inputs per machine, not
 
 | Machine | Ours, measured | ROCA, reported | C++ peer, latest reported |
 |---|---:|---:|---:|
-| Default | 14,412 | Not broken down | 8,529 |
-| Few registers | 27,284 | Not broken down | 13,589 |
-| No fused | 16,355 | Not broken down | 10,386 |
-| Slow memory | 23,248 | Not broken down | 11,993 |
-| Wide/fast | 14,114 | Not broken down | 6,625 |
-| All five | **95,413** | **163,533** | **51,122** |
+| Default | 13,819 | Not broken down | 8,529 |
+| Few registers | 23,794 | Not broken down | 13,589 |
+| No fused | 15,284 | Not broken down | 10,386 |
+| Slow memory | 22,544 | Not broken down | 11,993 |
+| Wide/fast | 13,295 | Not broken down | 6,625 |
+| All five | **88,736** | **163,533** | **51,122** |
 
-Our sum is 41.7% below ROCA's published sum. The latest C++ report is 46.4% below ours, so our sum is about 1.87 times its reported sum. This is a comparison against claims, not a reproduced head-to-head benchmark.
+Our sum is 45.7% below ROCA's published sum. The latest C++ report is 42.4% below ours, so our sum is about 1.74 times its reported sum. This is a comparison against claims, not a reproduced head-to-head benchmark.
 
 The old 500-row matrix JSON still sums to 52,130; the available stream report is older too (default 8,973). Neither is the new 51,122-cycle boost2 report. Therefore the old 26-wins/39-ties/435-losses count is historical and must not be presented as a comparison against the latest peer. Current aggregate values come from the refreshed README/BENCHMARKS, whose boost2 table reports additional matrix-product recipes.
 
@@ -39,19 +39,19 @@ Selected default sample gains versus the pre-bit-synthesis release (`a2d47f6`):
 | bit_reverse | 176 | **15** |
 | crc_bitwise | 854 | **386** |
 | nested_invariant | 447 | **11** |
-| matmul4 | 730 | 730 |
+| matmul4 | 730 | **415** |
 | adler32 | 555 | **151** |
 | fletcher16 | 348 | **101** |
 
 The strongest new gains follow structural proofs, not program names: SWAR counting, GF(2) synthesis, natural-loop invariants and additive nest collapse. Wider pure specialization covers up to twelve bits over two parameters and still rejects arrays. A separate common-modulus proof now defers checksum reductions while keeping ordinary loads, trapping behavior and canonical outputs intact; this improves Adler and Fletcher without specializing memory contents.
 
-The checksum step improves 10 public pairs and ties 490 against `5f863a8`, with no new sample regressions. The preceding portfolio release had four small timing regressions against its own predecessor; those tradeoffs remain recorded in D-030 and the release history. The five-machine sum is now 95,413, compared with 99,024 before checksum deferral. No current sample is slower than its unoptimized input. Candidate rankings still use a fixed corpus and can favor different versions on other inputs.
+The array-loop step improves 24 public pairs and ties 476 against `dc78809`, with no new sample regressions. Default matrix_add4 improves 209→120 and transpose8 improves 518→354; few-register matmul4 improves 3,004→507. The preceding portfolio release had four small timing regressions against its own predecessor; those tradeoffs remain recorded in D-030 and the release history. The five-machine sum is now 88,736, compared with 95,413 before static-control expansion. No current sample is slower than its unoptimized input. Candidate rankings still use a fixed corpus and can favor different versions on other inputs.
 
 ## Architecture and evidence
 
 Our mutable KIR pipeline now offers proof-based bit synthesis, bounded natural-loop LICM and additive collapse, two-parameter exhaustive specialization, and a small deterministic portfolio combining memory reuse, scheduling, allocation and unrolling choices. Profiles add bounded timing weights; they never authorize a transformation. The C++ documentation describes SSA/global analyses, a much wider candidate portfolio, stronger allocation/rematerialization/scratch choices, and broader memory/nest/matrix recipes. The remaining matrix and broader memory-loop gaps are consistent with that broader scope.
 
-Our added tests include alternate bit widths and CRC polynomials, nonlinearity/effect rejection, direct bit outputs, nested zero-trip and dominance cases, negative/wrapping additive coefficients, twelve-bit/two-input finite domains, and unselected nested candidates. A separate suite mutates every public source with register renaming, block shuffling, 96 actual constant changes, three new machines and wrong profiles, then checks repeated output across hash seeds. Reference step-limit skips are reported separately from matches. A new checksum suite directly checks normalizers and unselected candidates, including wrapped-positive products, late-tainted raw temporaries, zero trips and load traps. The release handoff records exact counts and Ubuntu evidence.
+Our added tests include alternate bit widths and CRC polynomials, nonlinearity/effect rejection, direct bit outputs, nested zero-trip and dominance cases, negative/wrapping additive coefficients, twelve-bit/two-input finite domains, and unselected nested candidates. A separate suite mutates every public source with register renaming, block shuffling, 96 actual constant changes, three new machines and wrong profiles, then checks repeated output across hash seeds. Reference step-limit skips are reported separately from matches. A new checksum suite directly checks normalizers and unselected candidates, including wrapped-positive products, late-tainted raw temporaries, zero trips and load traps. Static-control fixtures additionally check plain/cached and unselected outputs for varied rectangular nests, overlapping arrays, unknown aliases, volatile I/O, effects before traps and all live counters. No stored array contents or named recipes are used. The release handoff records exact counts and Ubuntu evidence.
 
 The peer describes extensive fuzzing, metamorphic and sanitizer campaigns. Those claims were not rerun, and counts with different definitions do not rank correctness. Our current public score is stronger than before, but the available evidence still places the latest C++ report substantially ahead. No winning claim follows from these practice measurements.
 

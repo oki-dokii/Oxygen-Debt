@@ -39,3 +39,4 @@ jobs:
           python3 tests/advanced.py "$kit"
           python3 tests/metamorphic.py "$kit"
           python3 tests/modulo.py "$kit"
+          python3 tests/expansion.py "$kit"

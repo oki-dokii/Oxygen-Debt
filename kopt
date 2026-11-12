@@ -13,6 +13,7 @@ from src.layout import load_profile
 from src.optimizer import optimize
 from src.finite import specialize
 from src.candidates import select
+from src.expansion import cache_loads, expand
 
 
 def main():
@@ -45,6 +46,14 @@ def main():
                 candidate = optimize(parse_program(source), source, machine, profile, options)
                 if candidate is not None:
                     candidates.append(candidate)
+            expanded = expand(program)
+            if expanded is not None:
+                candidate = optimize(parse_program(expanded), expanded, machine)
+                candidates.append(candidate if candidate is not None else expanded)
+                cached = cache_loads(parse_program(expanded), min(16, max(4, machine["registers"])))
+                if cached is not None:
+                    candidate = optimize(parse_program(cached), cached, machine)
+                    candidates.append(candidate if candidate is not None else cached)
             optimized = select(program, candidates, machine, profile)
         args.output.write_bytes(original if optimized is None else optimized.encode("utf-8"))
     except (KirError, OSError, ValueError) as error:
