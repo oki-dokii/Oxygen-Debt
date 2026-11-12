@@ -161,6 +161,8 @@ def defer_moduli(blocks, pure):
                             if op not in {"add", "mul", "mac", "addsh", "shl", "select"}:
                                 raise Reject()
                             guarded = sources
+                            if op in {"shl", "addsh"} and sources[-1][0] == "r" and sources[-1][1] in tainted:
+                                raise Reject()
                             if op == "select":
                                 if sources[0][0] == "r" and sources[0][1] in tainted:
                                     raise Reject()

@@ -25,7 +25,8 @@ def source(rng, number, modulus=65521, count_mask=63, payload_mask=255, scale=1,
     if variant != "unmasked": operations += [f"and {value}, {value}, {payload_mask}"]
     operations += [f"mul {value}, {value}, {scale}", f"add {first}, {a}, {value}", f"mod {a}, {first}, {modulus}"]
     if variant == "nonlinear_use": operations += [f"and {a}, {a}, 15"]
-    if variant in ("selector", "tainted_select"):
+    if variant == "tainted_shift": operations += [f"shl {term}, 1, {a}"]
+    elif variant in ("selector", "tainted_select"):
         operations += [f"and {value}, {value}, 1", f"select {term}, {a if variant == 'tainted_select' else value}, {a}, {b}"]
     elif square: operations += [f"mul {term}, {a}, {a}"]
     else: operations += [f"mul {term}, {a}, {weight}"]
@@ -77,6 +78,8 @@ def main():
               (dict(count_mask=3,payload_mask=0),True),
               (dict(variant='selector',modulus=31,count_mask=7,payload_mask=3),True),
               (dict(variant='tainted_select',modulus=7,count_mask=3,payload_mask=7,initial=0,second=1),False)]
+    cases += [(dict(variant=variant,modulus=7,count_mask=3,payload_mask=7,initial=0,second=1),False)
+              for variant in ('tainted_shift',)]
     cases += [(dict(variant=variant),False) for variant in ('unknown_initial','unmasked','store','volatile','division',
                                                           'nonlinear_use','subtract','tainted_address','tainted_counter',
                                                           'different_moduli','shared_exit','raw_temporary')]
