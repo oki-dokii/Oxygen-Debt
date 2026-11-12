@@ -1,12 +1,12 @@
 # Public submission comparison — refreshed 2026-11-12
 
-This compares our externally validated practice results with public author reports. It is not an official leaderboard; private entries and unindexed repositories are outside the search. No competitor optimizer was built or executed, and no competitor optimizer code was incorporated. The new Rust entry is reviewed from its published documentation only.
+This compares our externally validated practice results with public author reports. It is not an official leaderboard; private entries and unindexed repositories are outside the search. No competitor optimizer was built or executed, and no competitor optimizer code was incorporated. The new Rust entry is reviewed from its published documentation only. Competitor snapshots were refreshed on November 12; our measurements below were updated on November 13.
 
 ## Refreshed revisions
 
 | Entry | Revision | Evidence |
 |---|---|---|
-| Oxygen Debt | `298a1ca09e6a3e142886e56ef0ea939b84ed3ff3` | [Verified Ubuntu run](https://github.com/oki-dokii/Oxygen-Debt/actions/runs/43275266030), independent kit runner and generated suites |
+| Oxygen Debt | Counted-group release based on bb43e4f; final verified revision pending | Independent kit runner and sealed hold-out; current Ubuntu verification pending |
 | COMP10_ROKACODE | `1485b298f36e8027cd7c332949933af5b6001c7a` — unchanged in this refresh | Current README and benchmark report |
 | kopt-kiln-optimizer | `24000693b889211e3fbf12fc63a2317ac00f0081` — advanced to boost4 | Current README and boost4/boost2 benchmark report |
 | ariv-IIITB/oxygen-debt — newly found | `85b761c9278762b335626a5ee22cfaad585403ed` | Rust README/DESIGN; no comparable cycle table found |
@@ -27,14 +27,14 @@ Lower is better. These are sums over 100 supplied sample inputs per machine, not
 
 | Machine | Ours, measured | ROCA, reported | C++ peer, latest reported |
 |---|---:|---:|---:|
-| Default | 13,285 | Not broken down | 8,529 |
-| Few registers | 23,338 | Not broken down | 13,589 |
-| No fused | 14,888 | Not broken down | 10,386 |
-| Slow memory | 22,010 | Not broken down | 11,993 |
-| Wide/fast | 12,132 | Not broken down | 6,625 |
-| All five | **85,653** | **163,533** | **51,122** |
+| Default | 13,248 | Not broken down | 8,529 |
+| Few registers | 23,133 | Not broken down | 13,589 |
+| No fused | 14,859 | Not broken down | 10,386 |
+| Slow memory | 21,966 | Not broken down | 11,993 |
+| Wide/fast | 12,077 | Not broken down | 6,625 |
+| All five | **85,283** | **163,533** | **51,122** |
 
-Our sum is 47.6% below ROCA's published sum. The current C++ report is 40.3% below ours, so our sum is about 1.68 times its reported sum. This is a comparison against claims, not a reproduced head-to-head benchmark.
+Our sum is 47.8% below ROCA's published sum. The current C++ report is 40.1% below ours, so our sum is about 1.67 times its reported sum. This is a comparison against claims, not a reproduced head-to-head benchmark.
 
 The old 500-row matrix JSON still sums to 52,130; the available stream report is older too (default 8,973). Neither is the new 51,122-cycle boost2 report. Therefore the old 26-wins/39-ties/435-losses count is historical and must not be presented as a comparison against the latest peer. Current aggregate values come from the refreshed README/BENCHMARKS. Boost4 expands matrix recipes to 16 columns and reduced-effort searches for larger products; its report explicitly says all 500 public pairs remain unchanged from boost2. Thus 51,122 remains the current reported public total, despite the newer commit. The new Rust entry has no comparable number and is deliberately absent from this numeric table.
 
@@ -54,7 +54,7 @@ Selected default sample gains versus the pre-bit-synthesis release (`a2d47f6`):
 
 The strongest new gains follow structural proofs, not program names: SWAR counting, GF(2) synthesis, natural-loop invariants and additive nest collapse. Wider pure specialization covers up to twelve bits over two parameters and still rejects arrays. A separate common-modulus proof now defers checksum reductions while keeping ordinary loads, trapping behavior and canonical outputs intact; this improves Adler and Fletcher without specializing memory contents.
 
-The remaining-target step improves all 15 target/machine pairs and ties the other 485 against `89b6f34`, with no new sample regressions. Default sieve improves 1,702→1,608, bounds_trap 901→505 and branchy_select 345→301. The five-machine sum is 85,653 versus 88,736 before this release. The preceding historical portfolio tradeoffs remain recorded in D-030; no current sample is slower than its unoptimized input. Rankings still use bounded timing cases, with a separate control round adding long zero-RAM, all-one and alternating cases while retaining the existing portfolio winner.
+The latest counted-group release improves ten public pairs and ties 490 against bb43e4f, with no new sample regressions. Default matvec8 improves 81→65 and row_sums 73→52; few-register matvec8 improves 253→77. Sieve keeps its previous candidate because general uncertain-trip grouping did not qualify for production. The five-machine sum is 85,283 versus 85,653 before this release. The preceding control-target wins remain: default sieve 1,608, bounds_trap 505 and branchy_select 301. See [HOLDOUT.md](HOLDOUT.md) for a fresh 76-source qualification with 1,118 faster inputs, no measured regressions, and the rejected short-loop experiment.
 
 ## Architecture and evidence
 
@@ -68,9 +68,9 @@ The peer describes extensive fuzzing, metamorphic and sanitizer campaigns. Those
 
 These are engineering priorities inferred from our measured costs and the competitors' documented capabilities, not proof that copying a reported strategy will reproduce its gains. All implementations must be derived from semantics and keep existing candidates.
 
-1. **Global register allocation and pressure-aware scheduling.** Our current allocator mainly recycles names within blocks and pins values live across edges. The C++ entry and new Rust entry describe interference colouring/coalescing, while the C++ entry also describes rematerialization and alternate scheduling directions. The gap to the C++ report is largest in absolute cycles on slow memory (22,010 versus 11,993, gap 10,017) and few registers (23,338 versus 13,589, gap 9,749). Begin with interference-safe coalescing and pressure-based priorities; do not rewrite the entire compiler into SSA just to follow another architecture. Scratch spills require proof that original accesses cannot touch the reserved region.
-2. **Counted-loop groups with a scalar tail.** Four checked copies still execute a comparison per iteration. Sieve alone consumes 9,716 cycles across five machines (11.3% of our total). Prove enough remaining iterations, positive stride and no signed wrap to execute a 2/4/8-body group with fewer tests, then retain the original scalar exit path. This should target address/counting loops generally. Preserve every memory/volatile effect and predicate live-out, including on early traps.
-3. **Matrix operand sharing and small tiles.** Our expansion removes control but does not systematically share a loaded operand across several output accumulators or neighbouring rows. Current directly comparable matmul4 reports are below. Prove complete in-bounds ranges and disjoint output/input storage before changing load/store order. Try small column chunks and retain current order for overlap/trap cases. The confirmed matmul gap is 1,117 cycles across five machines, so this is a focused win rather than an explanation of the full 34,531-cycle gap.
+1. **Global register allocation and pressure-aware scheduling.** Our current allocator mainly recycles names within blocks and pins values live across edges. The C++ entry and new Rust entry describe interference colouring/coalescing, while the C++ entry also describes rematerialization and alternate scheduling directions. The gap to the C++ report is largest in absolute cycles on slow memory (21,966 versus 11,993, gap 9,973) and few registers (23,133 versus 13,589, gap 9,544). Begin with interference-safe coalescing and pressure-based priorities; do not rewrite the entire compiler into SSA just to follow another architecture. Scratch spills require proof that original accesses cannot touch the reserved region.
+2. **Extend the counted-loop proof cautiously.** The new production stage handles guaranteed-long memory loops with factors 2/4/8, signed overshoot proofs and a scalar tail. Uncertain/short-loop prototypes caused penalties and are not offered by the CLI. The fresh qualification improved larger matrices/long streams without a measured loss. Further coverage of short or uncertain trips needs a better cost/entry strategy, not simply relaxing the current gate; sieve retains its old candidate.
+3. **Matrix operand sharing and small tiles.** Our expansion removes control but does not systematically share a loaded operand across several output accumulators or neighbouring rows. Current directly comparable matmul4 reports are below. Prove complete in-bounds ranges and disjoint output/input storage before changing load/store order. Try small column chunks and retain current order for overlap/trap cases. The confirmed matmul gap is 1,117 cycles across five machines, so this is a focused win rather than an explanation of the full 34,161-cycle gap.
 4. **Load forwarding across joins and nested iterations.** Extend the current single-body rolling-load proof to joins and conditional inner loops, with versions for memory and explicit store invalidation. Our bubble_sort plus insertion_sort cost 9,087 cycles across machines. Sieve lookahead may also help, but only after proving that intervening marking stores cannot alias the prefetched flag. Wrong profiles must not affect legality.
 5. **Multi-output branch/state-machine regions.** The latest affine pass handles one escaped result. vending_fsm plus dfa_dispatch still cost 5,603 cycles across machines. A bounded pure-region/finite-state proof could remove larger dispatch trees while retaining volatile access and trap ordering. Afterwards, inspect region-level GF(2) lowering and bounded histogram counters as narrower follow-ups, rather than repeating already strong popcount/reversal work.
 
@@ -84,7 +84,7 @@ These are engineering priorities inferred from our measured costs and the compet
 
 The C++ values are explicitly in the current boost4 report; its public inputs were not independently rerun. Other historical per-case JSON remains historical. Our largest current costs are sieve 9,716, bubble_sort 5,539, insertion_sort 3,548, vending_fsm 3,017, bounds_trap 2,939, branchy_select 2,779, matmul4 2,607 and dfa_dispatch 2,586. These are absolute costs, not estimates of removable cycles.
 
-Keep Python for now. Our latest Ubuntu public maximum is 0.377 seconds and the current compiler meets the measured runtime gates; a language port would consume time without directly improving emitted Kiln code. Reserve a final independent held-out pass covering 8–16-sized/rectangular matrices, overlap, zero/short loops, other machines and incorrect profiles before freezing the submission.
+Keep Python for now. Our preceding verified Ubuntu public maximum was 0.377 seconds and the current compiler meets the measured runtime gates; a language port would consume time without directly improving emitted Kiln code. Reserve a final independent held-out pass covering 8–16-sized/rectangular matrices, overlap, zero/short loops, other machines and incorrect profiles before freezing the submission.
 
 ## Sources
 

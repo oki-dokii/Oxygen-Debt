@@ -15,6 +15,7 @@ from src.finite import specialize
 from src.candidates import select
 from src.expansion import cache_loads, expand
 from src.control import rewrite
+from src.groups import candidates as group_candidates
 
 
 def main():
@@ -56,11 +57,13 @@ def main():
                     candidate = optimize(parse_program(cached), cached, machine)
                     candidates.append(candidate if candidate is not None else cached)
             controls = []
+            group_sources = [program]
             for mode in ('diamonds', 'guards', 'pointers'):
                 rewritten = rewrite(program, mode)
                 if rewritten is not None:
                     candidate = optimize(parse_program(rewritten), rewritten, machine, profile)
                     controls.append(candidate if candidate is not None else rewritten)
+                    if mode == 'guards':group_sources.append(parse_program(rewritten))
                     if mode == 'pointers':
                         checked = rewrite(program, 'unroll')
                         if checked is not None:
@@ -76,6 +79,15 @@ def main():
                 fallback = optimized if optimized is not None else source
                 optimized = select(program, [fallback, *controls], machine, profile,
                                    diverse=True, fallback_source=fallback)
+            grouped_controls = []
+            for group_source in group_sources:
+                for grouped in group_candidates(group_source):
+                    candidate = optimize(parse_program(grouped), grouped, machine, profile)
+                    grouped_controls.append(candidate if candidate is not None else grouped)
+            if grouped_controls:
+                fallback = optimized if optimized is not None else source
+                optimized = select(program, [fallback, *grouped_controls], machine, profile,
+                                   diverse=True, fallback_source=fallback, no_regressions=True)
         args.output.write_bytes(original if optimized is None else optimized.encode("utf-8"))
     except (KirError, OSError, ValueError) as error:
         print(f"kopt: {error}", file=sys.stderr)

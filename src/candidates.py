@@ -29,7 +29,7 @@ def cases(nparams, diverse=False):
         yield args, [(0, memory)], {7: [index, 1, 0, 0xFFFFFFFF]}
 
 
-def select(program, sources, machine, profile, diverse=False, fallback_source=None):
+def select(program, sources, machine, profile, diverse=False, fallback_source=None, no_regressions=False):
     """Keep the original if a complete bounded comparison cannot establish a gain."""
     original = compile_program(program)
     inputs, references, times, edge_counts = [], [], [], []
@@ -61,6 +61,7 @@ def select(program, sources, machine, profile, diverse=False, fallback_source=No
     for time,weight in zip(times,weights): best_score *= time ** weight
     best = fallback_source
     if fallback_source is not None:best_score=None
+    baseline_times=[]
     work = 500_000
     for source in dict.fromkeys(sources):
         try:
@@ -72,14 +73,17 @@ def select(program, sources, machine, profile, diverse=False, fallback_source=No
         except KirError:
             continue
         score = 1
-        for values, reference, weight in zip(inputs, references, weights):
+        for index,(values, reference, weight) in enumerate(zip(inputs, references, weights)):
             args,memory,volatile = values
             run = execute(compiled, args, memory, volatile, min(max(1,work),20*reference.steps+1000), want_trace=True)
             work -= run.steps
             if (run.status != reference.status or run.value != reference.value or run.vlog != reference.vlog
                     or run.mem[:3072] != reference.mem[:3072]):
                 break
-            score *= time_trace(compiled,run.trace,machine) ** weight
+            cycles=time_trace(compiled,run.trace,machine)
+            if source==fallback_source:baseline_times.append(cycles)
+            elif no_regressions and (index>=len(baseline_times) or cycles>baseline_times[index]):break
+            score *= cycles ** weight
             if work <= 0: return best
         else:
             if best_score is None or score < best_score:

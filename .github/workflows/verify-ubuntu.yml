@@ -41,3 +41,5 @@ jobs:
           python3 tests/modulo.py "$kit"
           python3 tests/expansion.py "$kit"
           python3 tests/control.py "$kit"
+          python3 tests/groups.py "$kit"
+          python3 tests/holdout.py "$kit" --report "$RUNNER_TEMP/holdout.json" --artifacts "$RUNNER_TEMP/holdout-failure"

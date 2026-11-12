@@ -1,0 +1,144 @@
+{
+  "seed": 451729,
+  "fixtures": 76,
+  "machines": 6,
+  "inputs": 10,
+  "matches": 4560,
+  "matrix_oracles": 220,
+  "reference_timeouts": 0,
+  "outcomes": {
+    "RET": 3168,
+    "bad_address": 1314,
+    "explicit(1)": 54,
+    "div_by_zero": 24
+  },
+  "performance": {
+    "faster": 1118,
+    "tied": 3442
+  },
+  "cycles": {
+    "matrix": [
+      84329310,
+      81949440
+    ],
+    "stream": [
+      1543797,
+      1543797
+    ],
+    "long_stream": [
+      4203814,
+      3087549
+    ]
+  },
+  "max_current_seconds": 0.5613875830313191,
+  "max_baseline_seconds": 0.32082537503447384,
+  "baseline": "/tmp/oxygen-before-counted-groups/kopt",
+  "worst_slowdown": null,
+  "worst_extra_cycles": null,
+  "baseline_revision": "bb43e4f1bbf8d4361668728d61395c93ceb65069",
+  "kit_revision": "d23ac1d865df4cdacf7ad8e9fff3e1d560761c46",
+  "machine_configs": {
+    "unseen_4": {
+      "issue_width": 1,
+      "mem_ports": 1,
+      "registers": 4,
+      "reg_spill_penalty": 23,
+      "taken_branch_penalty": 0,
+      "icache_size": 1,
+      "icache_penalty": 0,
+      "lat_alu": 6,
+      "lat_mul": 4,
+      "lat_div": 7,
+      "lat_load": 21,
+      "lat_mac": 3,
+      "lat_addsh": 7,
+      "fused_mac": 0,
+      "fused_addsh": 0
+    },
+    "unseen_5": {
+      "issue_width": 2,
+      "mem_ports": 1,
+      "registers": 5,
+      "reg_spill_penalty": 0,
+      "taken_branch_penalty": 37,
+      "icache_size": 17,
+      "icache_penalty": 7,
+      "lat_alu": 2,
+      "lat_mul": 14,
+      "lat_div": 11,
+      "lat_load": 13,
+      "lat_mac": 9,
+      "lat_addsh": 10,
+      "fused_mac": 1,
+      "fused_addsh": 0
+    },
+    "unseen_7": {
+      "issue_width": 3,
+      "mem_ports": 2,
+      "registers": 7,
+      "reg_spill_penalty": 11,
+      "taken_branch_penalty": 1,
+      "icache_size": 37,
+      "icache_penalty": 1,
+      "lat_alu": 3,
+      "lat_mul": 6,
+      "lat_div": 9,
+      "lat_load": 21,
+      "lat_mac": 8,
+      "lat_addsh": 2,
+      "fused_mac": 0,
+      "fused_addsh": 1
+    },
+    "unseen_11": {
+      "issue_width": 4,
+      "mem_ports": 1,
+      "registers": 11,
+      "reg_spill_penalty": 3,
+      "taken_branch_penalty": 13,
+      "icache_size": 127,
+      "icache_penalty": 3,
+      "lat_alu": 5,
+      "lat_mul": 1,
+      "lat_div": 21,
+      "lat_load": 39,
+      "lat_mac": 15,
+      "lat_addsh": 4,
+      "fused_mac": 1,
+      "fused_addsh": 1
+    },
+    "unseen_19": {
+      "issue_width": 6,
+      "mem_ports": 3,
+      "registers": 19,
+      "reg_spill_penalty": 31,
+      "taken_branch_penalty": 4,
+      "icache_size": 257,
+      "icache_penalty": 0,
+      "lat_alu": 6,
+      "lat_mul": 10,
+      "lat_div": 30,
+      "lat_load": 41,
+      "lat_mac": 9,
+      "lat_addsh": 7,
+      "fused_mac": 0,
+      "fused_addsh": 0
+    },
+    "unseen_31": {
+      "issue_width": 8,
+      "mem_ports": 4,
+      "registers": 31,
+      "reg_spill_penalty": 1,
+      "taken_branch_penalty": 29,
+      "icache_size": 4096,
+      "icache_penalty": 2,
+      "lat_alu": 3,
+      "lat_mul": 3,
+      "lat_div": 28,
+      "lat_load": 6,
+      "lat_mac": 10,
+      "lat_addsh": 8,
+      "fused_mac": 1,
+      "fused_addsh": 0
+    }
+  }
+}

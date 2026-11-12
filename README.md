@@ -10,7 +10,7 @@ Scheduling checks longer incoming/outgoing and repeated-cycle contexts when regi
 
 It also proves closed forms for bounded polynomial summations, schedules independent instructions, and specializes pure functions with at most twelve relevant masked input bits across up to two parameters. Specialization evaluates every value in the proven domain during compilation; it never reads benchmark input files or uses stored answers. [Proofs and limits](DESIGN.md)
 
-Fixed-trip bit loops are proved with word expressions or GF(2) coefficients, enabling parallel population count, bit reflection and source-derived CRC maps. A bounded portfolio also tries nested-loop hoisting/additive collapse, different memory, unrolling, scheduling and allocation combinations, and a proved checksum-remainder deferral alternative. Profiles weight timing cases; they never justify a rewrite. A static-control candidate expands bounded, fully known loop paths without reading RAM and optionally keeps a bounded cache of successful literal-address loads through fresh value names. Affine branch diamonds can become a select plus arithmetic. Guarded loops can clamp their trip count and restore the original predicate before a late trap; proved address loops also offer pointer induction and four-way unrolling with a check after every body. A second timing round compares these candidates against the prior winner using additional zero/dense/alternating RAM cases. `--no-search` disables the whole-function portfolio for pass diagnostics.
+Fixed-trip bit loops are proved with word expressions or GF(2) coefficients, enabling parallel population count, bit reflection and source-derived CRC maps. A bounded portfolio also tries nested-loop hoisting/additive collapse, different memory, unrolling, scheduling and allocation combinations, and a proved checksum-remainder deferral alternative. Profiles weight timing cases; they never justify a rewrite. A static-control candidate expands bounded, fully known loop paths without reading RAM and optionally keeps a bounded cache of successful literal-address loads through fresh value names. Affine branch diamonds can become a select plus arithmetic. Guarded loops can clamp their trip count and restore the original predicate before a late trap; proved address loops also offer pointer induction and four-way unrolling with a check after every body. A second timing round compares these candidates against the prior winner using additional zero/dense/alternating RAM cases. Counted groups of 2/4/8 bodies are offered for memory loops only when ranges guarantee a complete first group and no signed wrap; the original scalar loop handles the tail. Their final selection rejects any candidate slower on a timing case. `--no-search` disables the whole-function portfolio for pass diagnostics.
 
 Use Python 3.10 or later. Set `machine.cfg` to the path of a Kiln machine file, such as `machines/machine_default.cfg` from the official kit.
 
@@ -49,19 +49,21 @@ python3 tests/metamorphic.py /path/to/LLH-26/Compilers/COMP10
 python3 tests/modulo.py /path/to/LLH-26/Compilers/COMP10
 python3 tests/expansion.py /path/to/LLH-26/Compilers/COMP10
 python3 tests/control.py /path/to/LLH-26/Compilers/COMP10
+python3 tests/groups.py /path/to/LLH-26/Compilers/COMP10
+python3 tests/holdout.py /path/to/LLH-26/Compilers/COMP10
 ```
 
-The 2026-11-12 local release run used organizer kit commit `d23ac1d` and all 100 supplied programs on five supplied machines. All 500 sample executions and 32,000 generated comparisons matched the independent organizer interpreter. These are summed sample cycles, not an official judging score or a prediction for unseen programs.
+The 2026-11-13 local release run used organizer kit commit `d23ac1d` and all 100 supplied programs on five supplied machines. All 500 sample executions and 32,000 generated comparisons matched the independent organizer interpreter. These are summed sample cycles, not an official judging score or a prediction for unseen programs.
 
 | Machine | Original cycles | Optimized cycles |
 |---|---:|---:|
-| Default | 103,671 | 13,285 |
-| Few registers | 202,164 | 23,338 |
-| No fused instructions | 107,966 | 14,888 |
-| Slow memory | 111,254 | 22,010 |
-| Wide/fast | 55,744 | 12,132 |
+| Default | 103,671 | 13,248 |
+| Few registers | 202,164 | 23,133 |
+| No fused instructions | 107,966 | 14,859 |
+| Slow memory | 111,254 | 21,966 |
+| Wide/fast | 55,744 | 12,077 |
 
-The default sample timings include `sum_sq` at 13 cycles, `collatz` at 18, and `spill_storm` at 19. These names appear only in validation and documentation, never in optimizer recognition. No supplied sample is slower than its unoptimized source. Against the preceding release, 15 sample pairs improve and 485 tie, with no new sample regressions. Candidate timing still uses a fixed corpus and can favor a different version on another input. Default popcount and bit_reverse are 15 cycles each, nested_invariant is 11, crc_bitwise is 386, adler32 is 151, and fletcher16 is 101. Default matmul4 is 415 cycles, matrix_add4 is 120 and transpose8 is 354. Default sieve is 1,608 cycles, bounds_trap is 505 and branchy_select is 301.
+The default sample timings include `sum_sq` at 13 cycles, `collatz` at 18, and `spill_storm` at 19. These names appear only in validation and documentation, never in optimizer recognition. No supplied sample is slower than its unoptimized source. Against the preceding release, 10 sample pairs improve and 490 tie, with no new sample regressions. Candidate timing still uses a fixed corpus and can favor a different version on another input. Default popcount and bit_reverse are 15 cycles each, nested_invariant is 11, crc_bitwise is 386, adler32 is 151, and fletcher16 is 101. Default matmul4 is 415 cycles, matrix_add4 is 120 and transpose8 is 354. Default sieve is 1,608 cycles, bounds_trap is 505 and branchy_select is 301. Default matvec8 is 65 cycles and row_sums is 52. A separate [new hold-out](docs/HOLDOUT.md) passes 4,560 comparisons on six unseen machine configurations, with 1,118 faster inputs and no measured timing regressions against the frozen baseline.
 
 The parser and machine loader in `src/kirlib.py`, and execution and timing code in `src/kiln.py`, reuse permitted organizer code from the [pinned kit](https://github.com/rudra-shroff06/LLH-26/blob/d23ac1d865df4cdacf7ad8e9fff3e1d560761c46/Compilers/COMP10/kirlib.py). The optimizer passes and generated test suites are our implementation. Runtime requires only the Python standard library; the external kit is used for independent validation.
 

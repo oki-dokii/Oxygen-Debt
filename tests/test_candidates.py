@@ -25,6 +25,12 @@ class CandidateSelectionTests(unittest.TestCase):
         self.assertEqual(select(parse_program(self.slow),[self.fast,self.slow],self.machine,{},
                                 diverse=True,fallback_source=self.fast),self.fast)
 
+    def test_pareto_gate_rejects_a_geometric_win_with_a_slow_input(self):
+        baseline='func f(v0)\nentry:\n  br v0, yes, no\nyes:\n'+'  add v1, v1, 0\n'*10+'  ret 42\nno:\n  ret 42\n'
+        candidate='func f(v0)\nentry:\n  br v0, yes, no\nyes:\n  ret 42\nno:\n'+'  add v1, v1, 0\n'*50+'  ret 42\n'
+        self.assertEqual(select(parse_program(baseline),[baseline,candidate],self.machine,{},fallback_source=baseline),candidate)
+        self.assertEqual(select(parse_program(baseline),[baseline,candidate],self.machine,{},fallback_source=baseline,no_regressions=True),baseline)
+
     def test_bad_profiles_do_not_admit_incorrect_candidates(self):
         hints={('h','body'):1,('h','done'):10**20,('missing','other'):10**30}
         for _ in range(2):
