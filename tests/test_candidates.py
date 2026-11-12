@@ -21,6 +21,10 @@ class CandidateSelectionTests(unittest.TestCase):
     def test_unchanged_input_remains_fallback(self):
         self.assertIsNone(select(parse_program(self.fast),[self.slow],self.machine,{}))
 
+    def test_second_stage_retains_previously_selected_fallback(self):
+        self.assertEqual(select(parse_program(self.slow),[self.fast,self.slow],self.machine,{},
+                                diverse=True,fallback_source=self.fast),self.fast)
+
     def test_bad_profiles_do_not_admit_incorrect_candidates(self):
         hints={('h','body'):1,('h','done'):10**20,('missing','other'):10**30}
         for _ in range(2):

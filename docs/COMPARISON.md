@@ -6,7 +6,7 @@ This compares our externally validated practice results with public author repor
 
 | Entry | Revision | Evidence |
 |---|---|---|
-| Oxygen Debt | `4e02c42c613ce49ad1babde8bfe7275fe8c8f96c` | [Verified Ubuntu run](https://github.com/oki-dokii/Oxygen-Debt/actions/runs/43228750329), independent kit runner and generated suites |
+| Oxygen Debt | Control-target release based on `89b6f34`; final Ubuntu revision pending | Independent kit runner and generated suites; final Ubuntu verification pending |
 | COMP10_ROKACODE | `1485b298f36e8027cd7c332949933af5b6001c7a` — unchanged when re-fetched | Current README and benchmark report |
 | kopt-kiln-optimizer | `761489fe765ee9a6960da8cf58f9aa716d783ef8` — updated since the previous comparison | Refreshed README and boost2 benchmark report |
 
@@ -18,14 +18,14 @@ Lower is better. These are sums over 100 supplied sample inputs per machine, not
 
 | Machine | Ours, measured | ROCA, reported | C++ peer, latest reported |
 |---|---:|---:|---:|
-| Default | 13,819 | Not broken down | 8,529 |
-| Few registers | 23,794 | Not broken down | 13,589 |
-| No fused | 15,284 | Not broken down | 10,386 |
-| Slow memory | 22,544 | Not broken down | 11,993 |
-| Wide/fast | 13,295 | Not broken down | 6,625 |
-| All five | **88,736** | **163,533** | **51,122** |
+| Default | 13,285 | Not broken down | 8,529 |
+| Few registers | 23,338 | Not broken down | 13,589 |
+| No fused | 14,888 | Not broken down | 10,386 |
+| Slow memory | 22,010 | Not broken down | 11,993 |
+| Wide/fast | 12,132 | Not broken down | 6,625 |
+| All five | **85,653** | **163,533** | **51,122** |
 
-Our sum is 45.7% below ROCA's published sum. The latest C++ report is 42.4% below ours, so our sum is about 1.74 times its reported sum. This is a comparison against claims, not a reproduced head-to-head benchmark.
+Our sum is 47.6% below ROCA's published sum. The latest C++ report is 40.3% below ours, so our sum is about 1.68 times its reported sum. This is a comparison against claims, not a reproduced head-to-head benchmark.
 
 The old 500-row matrix JSON still sums to 52,130; the available stream report is older too (default 8,973). Neither is the new 51,122-cycle boost2 report. Therefore the old 26-wins/39-ties/435-losses count is historical and must not be presented as a comparison against the latest peer. Current aggregate values come from the refreshed README/BENCHMARKS, whose boost2 table reports additional matrix-product recipes.
 
@@ -45,11 +45,11 @@ Selected default sample gains versus the pre-bit-synthesis release (`a2d47f6`):
 
 The strongest new gains follow structural proofs, not program names: SWAR counting, GF(2) synthesis, natural-loop invariants and additive nest collapse. Wider pure specialization covers up to twelve bits over two parameters and still rejects arrays. A separate common-modulus proof now defers checksum reductions while keeping ordinary loads, trapping behavior and canonical outputs intact; this improves Adler and Fletcher without specializing memory contents.
 
-The array-loop step improves 24 public pairs and ties 476 against `dc78809`, with no new sample regressions. Default matrix_add4 improves 209→120 and transpose8 improves 518→354; few-register matmul4 improves 3,004→507. The preceding portfolio release had four small timing regressions against its own predecessor; those tradeoffs remain recorded in D-030 and the release history. The five-machine sum is now 88,736, compared with 95,413 before static-control expansion. No current sample is slower than its unoptimized input. Candidate rankings still use a fixed corpus and can favor different versions on other inputs.
+The remaining-target step improves all 15 target/machine pairs and ties the other 485 against `89b6f34`, with no new sample regressions. Default sieve improves 1,702→1,608, bounds_trap 901→505 and branchy_select 345→301. The five-machine sum is 85,653 versus 88,736 before this release. The preceding historical portfolio tradeoffs remain recorded in D-030; no current sample is slower than its unoptimized input. Rankings still use bounded timing cases, with a separate control round adding long zero-RAM, all-one and alternating cases while retaining the existing portfolio winner.
 
 ## Architecture and evidence
 
-Our mutable KIR pipeline now offers proof-based bit synthesis, bounded natural-loop LICM and additive collapse, two-parameter exhaustive specialization, and a small deterministic portfolio combining memory reuse, scheduling, allocation and unrolling choices. Profiles add bounded timing weights; they never authorize a transformation. The C++ documentation describes SSA/global analyses, a much wider candidate portfolio, stronger allocation/rematerialization/scratch choices, and broader memory/nest/matrix recipes. The remaining matrix and broader memory-loop gaps are consistent with that broader scope.
+Our mutable KIR pipeline now offers proof-based bit synthesis, bounded natural-loop LICM and additive collapse, two-parameter exhaustive specialization, and a small deterministic portfolio combining memory reuse, scheduling, allocation and unrolling choices. Profiles add bounded timing weights; they never authorize a transformation. The C++ documentation describes SSA/global analyses, a much wider candidate portfolio, stronger allocation/rematerialization/scratch choices, and broader memory/nest/matrix recipes. The remaining matrix and broader memory-loop gaps are consistent with that broader scope. The current control layer adds affine diamond conversion, guarded loop clamping with late trap restoration, pointer induction candidates and four checked copies for proved guard/address loops.
 
 Our added tests include alternate bit widths and CRC polynomials, nonlinearity/effect rejection, direct bit outputs, nested zero-trip and dominance cases, negative/wrapping additive coefficients, twelve-bit/two-input finite domains, and unselected nested candidates. A separate suite mutates every public source with register renaming, block shuffling, 96 actual constant changes, three new machines and wrong profiles, then checks repeated output across hash seeds. Reference step-limit skips are reported separately from matches. A new checksum suite directly checks normalizers and unselected candidates, including wrapped-positive products, late-tainted raw temporaries, zero trips and load traps. Static-control fixtures additionally check plain/cached and unselected outputs for varied rectangular nests, overlapping arrays, unknown aliases, volatile I/O, effects before traps and all live counters. No stored array contents or named recipes are used. The release handoff records exact counts and Ubuntu evidence.
 

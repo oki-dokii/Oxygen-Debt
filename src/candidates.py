@@ -6,7 +6,7 @@ from .kiln import compile_program, execute, time_trace
 from .kirlib import KirError, check_machine_features, parse_program
 
 
-def cases(nparams):
+def cases(nparams, diverse=False):
     seed = 0x6495AB23
     values = []
     for _ in range(4096):
@@ -22,15 +22,19 @@ def cases(nparams):
                 seed = (1664525 * seed + 1013904223) & 0xFFFFFFFF
                 args.append(seed)
         memory = [0] * 4096 if index == 0 else values if index % 2 else list(reversed(values))
+        if diverse:
+            if index == 6:memory=[0]*4096
+            elif index == 10:memory=[0xFFFFFFFF]*4096
+            elif index == 12:memory=[0,0xFFFFFFFF]*2048
         yield args, [(0, memory)], {7: [index, 1, 0, 0xFFFFFFFF]}
 
 
-def select(program, sources, machine, profile):
+def select(program, sources, machine, profile, diverse=False, fallback_source=None):
     """Keep the original if a complete bounded comparison cannot establish a gain."""
     original = compile_program(program)
     inputs, references, times, edge_counts = [], [], [], []
     budget = 100_000
-    for args, memory, volatile in cases(len(program.params)):
+    for args, memory, volatile in cases(len(program.params), diverse):
         run = execute(original, args, memory, volatile, min(20_000, max(1,budget)), want_trace=True)
         budget -= run.steps
         if run.status == "TIMEOUT":
@@ -42,7 +46,7 @@ def select(program, sources, machine, profile):
         edge_counts.append(counts)
         if budget <= 0: break
     if len(inputs) < 2:
-        return None
+        return fallback_source
     weights = [1] * len(inputs)
     valid = {(label, target) for ins,label in zip(program.instrs, program.block_of)
              for kind,target in ins.args if kind == "l"}
@@ -55,7 +59,8 @@ def select(program, sources, machine, profile):
         for index in sorted(range(len(inputs)),key=lambda i:(distance(i),i))[:4]: weights[index] = 2
     best_score = 1
     for time,weight in zip(times,weights): best_score *= time ** weight
-    best = None
+    best = fallback_source
+    if fallback_source is not None:best_score=None
     work = 500_000
     for source in dict.fromkeys(sources):
         try:
@@ -77,6 +82,6 @@ def select(program, sources, machine, profile):
             score *= time_trace(compiled,run.trace,machine) ** weight
             if work <= 0: return best
         else:
-            if score < best_score:
+            if best_score is None or score < best_score:
                 best_score, best = score, source
     return best

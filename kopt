@@ -14,6 +14,7 @@ from src.optimizer import optimize
 from src.finite import specialize
 from src.candidates import select
 from src.expansion import cache_loads, expand
+from src.control import rewrite
 
 
 def main():
@@ -54,7 +55,27 @@ def main():
                 if cached is not None:
                     candidate = optimize(parse_program(cached), cached, machine)
                     candidates.append(candidate if candidate is not None else cached)
+            controls = []
+            for mode in ('diamonds', 'guards', 'pointers'):
+                rewritten = rewrite(program, mode)
+                if rewritten is not None:
+                    candidate = optimize(parse_program(rewritten), rewritten, machine, profile)
+                    controls.append(candidate if candidate is not None else rewritten)
+                    if mode == 'pointers':
+                        checked = rewrite(program, 'unroll')
+                        if checked is not None:
+                            candidate = optimize(parse_program(checked), checked, machine, profile)
+                            controls.append(candidate if candidate is not None else checked)
+                    if mode in ('guards', 'pointers'):
+                        unrolled = rewrite(parse_program(rewritten), 'unroll')
+                        if unrolled is not None:
+                            candidate = optimize(parse_program(unrolled), unrolled, machine, profile)
+                            controls.append(candidate if candidate is not None else unrolled)
             optimized = select(program, candidates, machine, profile)
+            if controls:
+                fallback = optimized if optimized is not None else source
+                optimized = select(program, [fallback, *controls], machine, profile,
+                                   diverse=True, fallback_source=fallback)
         args.output.write_bytes(original if optimized is None else optimized.encode("utf-8"))
     except (KirError, OSError, ValueError) as error:
         print(f"kopt: {error}", file=sys.stderr)

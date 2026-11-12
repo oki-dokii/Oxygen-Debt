@@ -22,3 +22,5 @@ The current scope also includes proved fixed-trip bit synthesis, natural-loop ne
 Checksum work adds a portfolio alternative that removes repeated positive-modulus reductions only after proving bounded unreduced arithmetic and exact restoration of externally used state, including zero-trip and trapping paths.
 
 Array-loop work adds bounded static-control expansion and successful-load caching for fixed source-derived nests. Correctness is independent of array contents; data-dependent branches conservatively reject.
+
+The remaining control targets add affine branch merging, min-bound explicit-trap loops and checked expansion of proved address loops. All three supplied targets must improve on each supplied machine while preserving every validated outcome; report broader tradeoffs separately.
