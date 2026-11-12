@@ -6,7 +6,7 @@ This compares our externally validated practice results with public author repor
 
 | Entry | Revision | Evidence |
 |---|---|---|
-| Oxygen Debt | Checksum release based on `5f863a8`; exact verified code recorded in WORKFLOW | Independent kit runner and generated suites; current Ubuntu verification pending (previous run linked in WORKFLOW) |
+| Oxygen Debt | `42b519eec9019c3abe0071be4e2be04890343513` | [Verified Ubuntu run](https://github.com/oki-dokii/Oxygen-Debt/actions/runs/43201225388), independent kit runner and generated suites |
 | COMP10_ROKACODE | `1485b298f36e8027cd7c332949933af5b6001c7a` — unchanged when re-fetched | Current README and benchmark report |
 | kopt-kiln-optimizer | `761489fe765ee9a6960da8cf58f9aa716d783ef8` — updated since the previous comparison | Refreshed README and boost2 benchmark report |
 
