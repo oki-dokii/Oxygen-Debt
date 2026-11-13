@@ -1,0 +1,99 @@
+{
+  "baseline_revision": "439106e2f045a02f288a52e27680714dc49ce21f",
+  "cases": [
+    {
+      "case": 84,
+      "field": "worst_slowdown",
+      "input": [
+        3,
+        15
+      ],
+      "machine": "unseen_7",
+      "outputs": {
+        "baseline": {
+          "cycles": 327,
+          "dynamic_instructions": 99,
+          "opcounts": {
+            "add": 21,
+            "and": 1,
+            "br": 19,
+            "const": 4,
+            "jmp": 13,
+            "load": 12,
+            "lt": 19,
+            "ret": 1,
+            "sub": 9
+          },
+          "register_names": 8,
+          "static_instructions": 26
+        },
+        "current": {
+          "cycles": 362,
+          "dynamic_instructions": 105,
+          "opcounts": {
+            "add": 12,
+            "and": 1,
+            "br": 19,
+            "const": 10,
+            "jmp": 10,
+            "load": 9,
+            "lt": 19,
+            "mov": 15,
+            "ret": 1,
+            "sub": 9
+          },
+          "register_names": 9,
+          "static_instructions": 46
+        }
+      }
+    },
+    {
+      "case": 89,
+      "field": "worst_extra_cycles",
+      "input": [
+        127,
+        3
+      ],
+      "machine": "unseen_7",
+      "outputs": {
+        "baseline": {
+          "cycles": 172879,
+          "dynamic_instructions": 43539,
+          "opcounts": {
+            "add": 11781,
+            "and": 1,
+            "br": 7939,
+            "const": 64,
+            "jmp": 4033,
+            "load": 7812,
+            "lt": 7939,
+            "ret": 1,
+            "sub": 3969
+          },
+          "register_names": 8,
+          "static_instructions": 26
+        },
+        "current": {
+          "cycles": 181439,
+          "dynamic_instructions": 51225,
+          "opcounts": {
+            "add": 11592,
+            "and": 1,
+            "br": 7939,
+            "const": 190,
+            "jmp": 3970,
+            "load": 3969,
+            "lt": 7939,
+            "mov": 11655,
+            "ret": 1,
+            "sub": 3969
+          },
+          "register_names": 9,
+          "static_instructions": 46
+        }
+      }
+    }
+  ],
+  "compiler_revision": "b637236364d9050ae5f3df6177ac76b0bc4e6578",
+  "qualification_seed": 927641
+}
