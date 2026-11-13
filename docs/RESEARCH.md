@@ -23,40 +23,23 @@ These checks used the organizers' original and optimized files with the same sam
 
 The `sum_sq` example uses `mac`, so its optimized file is invalid on the no-fused machine. That is a useful machine-compatibility regression case.
 
-## Other public implementations
-
-Checked on 2026-11-11 using GitHub repository and code search, then read the public documentation. The following are separate implementations of this exact COMP10 challenge. Their performance numbers are author-reported and have not been reproduced with our runner.
-
-| Repository | Documented approach | Reported result |
-|---|---|---|
-| [RohitKattimani/COMP10_ROKACODE](https://github.com/RohitKattimani/COMP10_ROKACODE/tree/1485b298f36e8027cd7c332949933af5b6001c7a) | Python, local optimization, loop recognition, graph coloring, and a bounded square-sum formula | `sum_sq` on the default machine at 21 cycles. Its report gives 163,533 optimized cycles summed across five machines. |
-| [wildwolf07/kopt-kiln-optimizer](https://github.com/wildwolf07/kopt-kiln-optimizer/tree/1689c93ce8ae4629914aef090bf2a097e31b66c9) | C++17, SSA, machine-aware candidate search, scheduling, and structural specialization | The README's candidate table gives 8,700 cycles summed across default-machine samples. It allows individual timing regressions. |
-
-The second repository's default-machine original total is 103,671, matching the original total in our runner. That makes its reported result worth independently investigating, while a performance comparison still needs the same pinned kit, inputs, executable revision, and runner. Closed forms and scheduling are the clearest documented areas to examine next. Implementation work in this session remained independently developed.
-
 ## Implemented strategies and reasoning
 
-On 2026-11-12 we implemented three general strategies independently: symbolic polynomial recurrence recognition, complete finite-domain specialization, and dependency scheduling. The local default total at the comparison revision was 16,645 cycles; that remains above the other implementation's unverified reported 8,700. Do not present this as a head-to-head result or a winning guarantee.
+On 2026-11-12 we implemented symbolic polynomial recurrence recognition, complete finite-domain specialization, and dependency scheduling.
 
 For sums over `i=0..n-1`, use `sum(1)=n`, `sum(i)=n(n-1)/2`, `sum(i²)=n(n-1)(2n-1)/6`, and `sum(i³)=[n(n-1)/2]²`. These identities can be checked by taking the difference at `n+1` and `n`, plus the zero base case. Bound analysis justifies intermediate signed divisions; multiplication by the inverse of three modulo 2³² handles an exact division after halving. The implementation derives coefficients from the body rather than recognizing sample syntax. Additional proof conditions for signed remainder are recorded in [DESIGN](../DESIGN.md).
 
-Finite specialization is partial evaluation after a dependency proof: masked original inputs partition all 32-bit words into at most 1,024 equivalence classes. Evaluate every class from source and verify every emitted candidate. The proof establishes coverage; randomized tests independently exercise the implementation. The permitted execution and timing code is copied from the pinned [organizer kirlib.py](https://github.com/rudra-shroff06/LLH-26/blob/d23ac1d865df4cdacf7ad8e9fff3e1d560761c46/Compilers/COMP10/kirlib.py), credited in `src/kiln.py`. The validator remains the unmodified external kit. No competitor implementation code was copied.
+Finite specialization is partial evaluation after a dependency proof: masked original inputs partition all 32-bit words into at most 1,024 equivalence classes. Evaluate every class from source and verify every emitted candidate. The proof establishes coverage; randomized tests independently exercise the implementation. The permitted execution and timing code is copied from the pinned [organizer kirlib.py](https://github.com/rudra-shroff06/LLH-26/blob/d23ac1d865df4cdacf7ad8e9fff3e1d560761c46/Compilers/COMP10/kirlib.py), credited in `src/kiln.py`. The validator remains the unmodified external kit.
 
 Scheduling preserves mutable-register dependencies and serializes potentially trapping operations with memory effects. Critical-path prioritization supplies a candidate; structural timing paths decide profitability. The short-path model missed spilling regressions, so the first version excluded those programs. A later version added bounded incoming/outgoing paths and repeated cycles before admitting spilling candidates, with a deterministic cost budget. Longer histories remain a limitation. [Decision log](DECISIONS.md)
 
-## Updated public comparison — 2026-11-12
-
-[Full comparison](COMPARISON.md) pins both peers, compares all 500 published C++ result rows with our verified `040642d` results, and records architectural and testing differences. Our five-machine total is 109,416 versus ROCA's reported 163,533 and the C++ entry's reported 52,130. Against the latter's published rows, we win 26 pairs, tie 39 and lose 435. These are comparisons with author-reported data, not independently reproduced competitor runs. The most substantial remaining gaps include global loop/memory work, bit-operation synthesis, allocation and a broader candidate portfolio.
-
 ## Rolling memory implementation — 2026-11-12
 
-Implemented source-derived affine load/store forwarding across a single counting loop, independently of competitor code. The invariant is that a carry holds the next target address's last established memory value. Initial bounds and alias checks cover the base case and induction step. Safe transformation and profitability remain separate: original stores/traps stay in place, while structural timing paths and machine-capacity checks decide whether to emit a candidate. The first performance experiment exposed an interaction with loop doubling; preserving those existing plans removed the public regressions. See [DESIGN](../DESIGN.md) and D-026. The five-machine total is now 108,965 cycles (default 16,565), with 11 improved public pairs and no regressions against the comparison revision. The earlier [public comparison](COMPARISON.md) remains a pinned historical comparison, not a measurement of this new revision.
+Implemented source-derived affine load/store forwarding across a single counting loop. The invariant is that a carry holds the next target address's last established memory value. Initial bounds and alias checks cover the base case and induction step. Safe transformation and profitability remain separate: original stores/traps stay in place, while structural timing paths and machine-capacity checks decide whether to emit a candidate. The first performance experiment exposed an interaction with loop doubling; preserving those existing plans removed the public regressions. See [DESIGN](../DESIGN.md) and D-026. The five-machine total is now 108,965 cycles (default 16,565), with 11 improved public pairs and no regressions against the preceding revision.
 
-## Bit proofs, nested algebra and current comparison — 2026-11-12
+## Bit proofs and nested algebra — 2026-11-12
 
-Word-parallel population count sums disjoint bit fields before gathering byte counts. Bit reflection is a sequence of width-1/2/4/8/16 swaps. Other fixed-trip pure bit loops are evaluated over affine GF(2) coefficient vectors: XOR, constant masks/shifts and restricted constant-difference conditionals preserve the representation. No sampled input is used to infer linearity. Additive-loop collapse instead proves a word-linear recurrence and sums the induction term with n(n−1)/2 under the bounded range proof. Both approaches were implemented independently; references to peer designs describe scope, not copied code.
-
-[The refreshed comparison](COMPARISON.md) pins ROCA at unchanged `1485b298` and the C++ peer at new `761489fe`. The peer now reports 51,122 summed sample cycles; its older per-case JSON belongs to an earlier stage and is not mixed with that new claim. Our corresponding local total is 99,024. New candidate/profile and metamorphic-test limits are recorded in DESIGN and WORKFLOW.
+Word-parallel population count sums disjoint bit fields before gathering byte counts. Bit reflection is a sequence of width-1/2/4/8/16 swaps. Other fixed-trip pure bit loops are evaluated over affine GF(2) coefficient vectors: XOR, constant masks/shifts and restricted constant-difference conditionals preserve the representation. No sampled input is used to infer linearity. Additive-loop collapse instead proves a word-linear recurrence and sums the induction term with n(n−1)/2 under the bounded range proof. Both approaches derive rewrites from source semantics.
 
 ## Deferred checksum remainders — 2026-11-12
 
@@ -64,13 +47,13 @@ Implemented an independent congruence proof for bounded nonnegative checksum rec
 
 ## Static-control array loops — 2026-11-12
 
-The implementation derives an execution path from exact abstract word constants and treats parameters and all memory/volatile results as unknown. A path is valid for every input only when every branch decision is exact; effect/trap order then follows by induction over the emitted trace. Fresh definitions allow a saved literal-address read to survive mutable source-register overwrites. Prior successful reads establish validity, and intervening stores invalidate possibly aliased entries. This derivation uses ordinary partial evaluation and value forwarding; it incorporates no peer recipes or sample memory. Direct generated fixtures include rectangular nests, aliasing outputs, scratch boundaries and effects.
+The implementation derives an execution path from exact abstract word constants and treats parameters and all memory/volatile results as unknown. A path is valid for every input only when every branch decision is exact; effect/trap order then follows by induction over the emitted trace. Fresh definitions allow a saved literal-address read to survive mutable source-register overwrites. Prior successful reads establish validity, and intervening stores invalidate possibly aliased entries. This derivation uses ordinary partial evaluation and value forwarding; it does not use sample memory. Direct generated fixtures include rectangular nests, aliasing outputs, scratch boundaries and effects.
 
 ## Data-dependent control targets — 2026-11-12
 
 Affine arms of the form x+a / x+b can merge as x+select(cond,a,b) in the 32-bit ring. Reads before definition within either arm must count as escaping state, otherwise a carried temporary can be silently dropped. For an increasing unit-stride loop with an upper trap at L, min(n,L) gives exactly the completed work iterations; a late n>L decision reaches the original trap after the same effects. The original head predicate must be restored if the trap block reads it. Pointer translation preserves signed ordering only with explicit initial/bound/overshoot ranges. Four checked copies preserve the original test between every body, avoiding a divisibility or minimum-trip assumption.
 
-Timing-case inspection exposed correlated zero arguments/zero RAM, which never entered flag-dependent marking loops. A separate control comparison now uses additional all-zero, all-one and alternating RAM patterns while retaining the prior portfolio winner. These observations influence candidate profitability, never validity. No program names, fixed array contents or peer recipes enter the compiler.
+Timing-case inspection exposed correlated zero arguments/zero RAM, which never entered flag-dependent marking loops. A separate control comparison now uses additional all-zero, all-one and alternating RAM patterns while retaining the prior portfolio winner. These observations influence candidate profitability, never validity. No program names or fixed array contents enter the compiler.
 
 ## Counted groups and hold-out qualification — 2026-11-13
 
@@ -78,8 +61,8 @@ For i'=i+s with s>0, i<n−(U−1)s proves that U original comparisons succeed. 
 
 ## Global register reuse follow-up
 
-The implementation derives standard def-use webs from a reaching-definition fixed point, then uses backwards liveness to construct a mutable-register interference graph. Initial values and dead writes require explicit interference treatment in KIR. Colouring and version-based pressure estimates propose candidates; source-level proofs establish validity. No competitor implementation was copied or executed. The prior public-comparison snapshots above are historical; [COMPARISON.md](COMPARISON.md) contains current pins and reports, and [BACKEND.md](BACKEND.md) contains the independent implementation proof and test evidence.
+The implementation derives standard def-use webs from a reaching-definition fixed point, then uses backwards liveness to construct a mutable-register interference graph. Initial values and dead writes require explicit interference treatment in KIR. Colouring and version-based pressure estimates propose candidates; source-level proofs establish validity. [BACKEND.md](BACKEND.md) contains the implementation proof and test evidence.
 
 ## Cross-block memory follow-up
 
-The memory candidate is derived from must-available equations and ordinary affine substitution modulo 2^32. Its odd-coefficient inverse is exact because an odd word is invertible modulo 2^32; even coefficients drop dependent facts. Common holders and CFG duplication do not themselves remove reads: a second complete analysis must prove availability at each replacement. The first iteration retains the original guarded read. No peer implementation, sample RAM or named sorting recipe is used. [Proof, bounds and reproducible qualification](FORWARDING.md).
+The memory candidate is derived from must-available equations and ordinary affine substitution modulo 2^32. Its odd-coefficient inverse is exact because an odd word is invertible modulo 2^32; even coefficients drop dependent facts. Common holders and CFG duplication do not themselves remove reads: a second complete analysis must prove availability at each replacement. The first iteration retains the original guarded read. No sample RAM or named sorting recipe is used. [Proof, bounds and reproducible qualification](FORWARDING.md).

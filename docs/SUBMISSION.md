@@ -71,7 +71,7 @@ No dependency installation or native compilation is needed. The judge supplies t
 - Ubuntu 22.04 / Python 3.10 verification passes all three groups: 97 unit tests, 500 public samples and 738,950 generated current-output comparisons. Known reference/feature skips remain separate.
 - Fresh hold-out passes 5,520 equivalence checks, with 220 matrix and 160 signed-sorting oracles.
 
-Correctness evidence is not a hidden-test guarantee. Public sample timings are not an official leaderboard. The latest hold-out has 709 faster inputs, 4,783 ties and 28 slower inputs; sorting aggregate cycles improve 7.02%. Both worst timing losses and their replay counts are documented in `FORWARDING.md` and the regression-audit JSON.
+Correctness evidence is not a hidden-test guarantee. Public sample timings do not predict every hidden workload. The latest hold-out has 709 faster inputs, 4,783 ties and 28 slower inputs; sorting aggregate cycles improve 7.02%. Both worst timing losses and their replay counts are documented in `FORWARDING.md` and the regression-audit JSON.
 
 ## Finish the submission
 
