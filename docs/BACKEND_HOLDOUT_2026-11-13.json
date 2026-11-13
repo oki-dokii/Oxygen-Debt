@@ -1,6 +1,7 @@
 {
   "baseline": "/tmp/oxygen-before-register-backend/kopt",
   "baseline_revision": "90be4ab911d5da0fe695104d66b1f339485d827e",
+  "compiler_revision": "373089912ec27947a5b598a6ff892f55c25aa62f",
   "cycles": {
     "long_stream": [
       3010837,

@@ -26,7 +26,7 @@ The first full public pass measured **82,827 cycles**, versus 85,283 at the froz
 
 Fresh hold-out seed **863507** passes 4,560 independent current-output equivalence checks, separately 4,560 baseline checks, 220 matrix-oracle checks and two-hash determinism on six unseen machine configurations. Against 90be4ab: **669 faster, 3,891 tied, zero slower**, zero reference timeouts. Matrix cycles 84,325,190→84,065,690; long streams 3,010,837→2,830,608; short streams 1,497,214→1,383,158. Maximum current compilation 0.993 seconds; baseline maximum 3.742 seconds under concurrent local test load. These maxima do not establish a compiler-throughput ratio. No compiler changes were made after inspecting this sealed result. Exact configurations/outcomes are in [the JSON report](BACKEND_HOLDOUT_2026-11-13.json).
 
-Complete regression and Ubuntu evidence are recorded in [WORKFLOW.md](WORKFLOW.md).
+All previous targeted suites and two stress seeds pass; local total **657,670 generated current-output comparisons**. The archived submission builds/runs from another directory, passes the external validator and has the required DESIGN headings without bundled kit directories. Ubuntu 22.04 / Python 3.10 verified code `373089912ec27947a5b598a6ff892f55c25aa62f` in **14 minutes 38 seconds**, with 83 unit tests, all 500 public cases and **652,870 generated current-output comparisons**. Public maximum 0.552 seconds; fresh hold-out maximum 1.703 seconds. The known reference/feature skips are separate from matches. [Successful CI run](https://github.com/oki-dokii/Oxygen-Debt/actions/runs/43433809633). Full handoff is in [WORKFLOW.md](WORKFLOW.md).
 
 ## Reproduce
 

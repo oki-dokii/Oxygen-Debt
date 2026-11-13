@@ -1,12 +1,12 @@
 # Public submission comparison — refreshed 2026-11-13
 
-This compares our externally validated practice results with public author reports. It is not an official leaderboard; private entries and unindexed repositories are outside the search. No competitor optimizer was built or executed, and no competitor optimizer code was incorporated. Competitors are reviewed from published documentation and reports only. All three competitor snapshots were refreshed on November 13; the preceding release passed Ubuntu verification, and the new backend release is being qualified.
+This compares our externally validated practice results with public author reports. It is not an official leaderboard; private entries and unindexed repositories are outside the search. No competitor optimizer was built or executed, and no competitor optimizer code was incorporated. Competitors are reviewed from published documentation and reports only. All three competitor snapshots were refreshed on November 13; the new backend release passed Ubuntu verification.
 
 ## Refreshed revisions
 
 | Entry | Revision | Evidence |
 |---|---|---|
-| Oxygen Debt | Global backend based on frozen `90be4ab`; final code pin pending | Independent kit runner and fresh seed 863507; current Ubuntu run pending |
+| Oxygen Debt | `373089912ec27947a5b598a6ff892f55c25aa62f` | Independent kit runner, fresh seed 863507 and successful Ubuntu CI |
 | COMP10_ROKACODE | `1485b298f36e8027cd7c332949933af5b6001c7a` — unchanged in this refresh | Current README and benchmark report |
 | kopt-kiln-optimizer | `24000693b889211e3fbf12fc63a2317ac00f0081` — boost4, unchanged in this refresh | Current README and boost4/boost2 benchmark report |
 | ariv-IIITB/oxygen-debt | `a67f0efc7475a552f72a2bd6ec569b7616baba6d` | Rust README/DESIGN/HANDOFF; latest handoff reports 70,525 at c0e021a |
@@ -92,7 +92,7 @@ The C++ values are explicitly in the current boost4 report; its public inputs we
 
 The bounded allocation/scheduling step and fresh qualification are complete. Next pursue sorting/nested memory reuse and small matrix chunks, while checking large live-program effectiveness. Keep each change only after a measured benefit and fresh semantic qualification; preserve the verified release as fallback. Avoid starting a full SSA rewrite today.
 
-Keep Python for now. The preceding Ubuntu public maximum was 0.576 seconds; the new local public/hold-out maxima are 0.302/0.993 seconds while Ubuntu verification is pending; a language port would consume time without directly improving emitted Kiln code. The requested fresh held-out qualification is complete. Any further tuning needs a new untouched qualification seed. Before submission, verify the clean-clone build, required DESIGN headings, deterministic output, executable/LF files, organizer access and demo/reproduction instructions.
+Keep Python for now. Current Ubuntu public/hold-out compilation maxima are 0.552/1.703 seconds; a language port would consume time without directly improving emitted Kiln code. The requested fresh held-out qualification is complete. Any further tuning needs a new untouched qualification seed. Before submission, verify the clean-clone build, required DESIGN headings, deterministic output, executable/LF files, organizer access and demo/reproduction instructions.
 
 ## Sources
 
