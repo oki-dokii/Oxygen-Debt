@@ -9,7 +9,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -42,4 +42,5 @@ jobs:
           python3 tests/expansion.py "$kit"
           python3 tests/control.py "$kit"
           python3 tests/groups.py "$kit"
-          python3 tests/holdout.py "$kit" --report "$RUNNER_TEMP/holdout.json" --artifacts "$RUNNER_TEMP/holdout-failure"
+          python3 tests/backend.py "$kit"
+          python3 tests/holdout.py "$kit" --seed 863507 --report "$RUNNER_TEMP/holdout.json" --artifacts "$RUNNER_TEMP/holdout-failure"

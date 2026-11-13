@@ -26,3 +26,5 @@ Array-loop work adds bounded static-control expansion and successful-load cachin
 The remaining control targets add affine branch merging, min-bound explicit-trap loops and checked expansion of proved address loops. All three supplied targets must improve on each supplied machine while preserving every validated outcome; report broader tradeoffs separately.
 
 Deadline qualification adds a frozen rollback baseline and a genuinely separate hold-out corpus. Counted grouping is retained only for guaranteed-long memory loops with a per-timing-case nonregression gate; unsuccessful short-loop experiments remain outside production selection.
+
+The global backend milestone adds bounded cross-block register reuse and pressure scheduling, with proof-based web splitting, previous-output fallback and independent qualification. See [BACKEND.md](BACKEND.md).

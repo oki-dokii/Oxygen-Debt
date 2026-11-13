@@ -57,13 +57,13 @@ The 2026-11-13 local release run used organizer kit commit `d23ac1d` and all 100
 
 | Machine | Original cycles | Optimized cycles |
 |---|---:|---:|
-| Default | 103,671 | 13,248 |
-| Few registers | 202,164 | 23,133 |
-| No fused instructions | 107,966 | 14,859 |
-| Slow memory | 111,254 | 21,966 |
-| Wide/fast | 55,744 | 12,077 |
+| Default | 103,671 | 13,105 |
+| Few registers | 202,164 | 21,402 |
+| No fused instructions | 107,966 | 14,735 |
+| Slow memory | 111,254 | 21,797 |
+| Wide/fast | 55,744 | 11,788 |
 
-The default sample timings include `sum_sq` at 13 cycles, `collatz` at 18, and `spill_storm` at 19. These names appear only in validation and documentation, never in optimizer recognition. No supplied sample is slower than its unoptimized source. Against the preceding release, 10 sample pairs improve and 490 tie, with no new sample regressions. Candidate timing still uses a fixed corpus and can favor a different version on another input. Default popcount and bit_reverse are 15 cycles each, nested_invariant is 11, crc_bitwise is 386, adler32 is 151, and fletcher16 is 101. Default matmul4 is 415 cycles, matrix_add4 is 120 and transpose8 is 354. Default sieve is 1,608 cycles, bounds_trap is 505 and branchy_select is 301. Default matvec8 is 65 cycles and row_sums is 52. A separate [new hold-out](docs/HOLDOUT.md) passes 4,560 comparisons on six unseen machine configurations, with 1,118 faster inputs and no measured timing regressions against the frozen baseline.
+The default sample timings include `sum_sq` at 13 cycles, `collatz` at 18, and `spill_storm` at 19. These names appear only in validation and documentation, never in optimizer recognition. No supplied sample is slower than its unoptimized source. Against frozen release 90be4ab, 109 sample pairs improve and 391 tie, with no new sample regressions (85,283 → 82,827 total cycles). Candidate timing still uses a fixed corpus and can favor a different version on another input. Default popcount and bit_reverse are 15 cycles each, nested_invariant is 11, crc_bitwise is 350, adler32 is 144, and fletcher16 is 96. Default matmul4 is 415 cycles, matrix_add4 is 120 and transpose8 is 354. Default sieve is 1,608 cycles, bounds_trap is 505 and branchy_select is 290. Default matvec8 is 65 cycles and row_sums is 48. The latest [backend hold-out](docs/BACKEND.md) passes 4,560 comparisons on six unseen machine configurations, with 669 faster inputs and no measured timing regressions against frozen 90be4ab. The earlier [counted-group qualification](docs/HOLDOUT.md) is retained separately.
 
 The parser and machine loader in `src/kirlib.py`, and execution and timing code in `src/kiln.py`, reuse permitted organizer code from the [pinned kit](https://github.com/rudra-shroff06/LLH-26/blob/d23ac1d865df4cdacf7ad8e9fff3e1d560761c46/Compilers/COMP10/kirlib.py). The optimizer passes and generated test suites are our implementation. Runtime requires only the Python standard library; the external kit is used for independent validation.
 
@@ -79,3 +79,5 @@ The [workflow and handoff](docs/WORKFLOW.md) records the latest measured results
 | [DESIGN.md](DESIGN.md) | The implementation record in the organizers' required format |
 
 [Official COMP10 starter kit](https://github.com/rudra-shroff06/LLH-26/tree/main/Compilers/COMP10)
+
+The [global backend](docs/BACKEND.md) adds complete interference colouring, reaching-definition web splitting and pressure-aware scheduling as candidates against the preceding winner. Independent direct testing includes unselected forms, initial-zero values, dead writes, joins, loops and trap/volatile effects.

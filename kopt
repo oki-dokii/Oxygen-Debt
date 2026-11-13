@@ -16,6 +16,7 @@ from src.candidates import select
 from src.expansion import cache_loads, expand
 from src.control import rewrite
 from src.groups import candidates as group_candidates
+from src.backend import candidates as backend_candidates
 
 
 def main():
@@ -87,6 +88,12 @@ def main():
             if grouped_controls:
                 fallback = optimized if optimized is not None else source
                 optimized = select(program, [fallback, *grouped_controls], machine, profile,
+                                   diverse=True, fallback_source=fallback, no_regressions=True)
+        if not args.no_search and 4 < len(program.instrs) <= 500:
+            fallback = optimized if optimized is not None else source
+            backends = backend_candidates(fallback, machine)
+            if backends:
+                optimized = select(program, [fallback, *backends], machine, profile,
                                    diverse=True, fallback_source=fallback, no_regressions=True)
         args.output.write_bytes(original if optimized is None else optimized.encode("utf-8"))
     except (KirError, OSError, ValueError) as error:
