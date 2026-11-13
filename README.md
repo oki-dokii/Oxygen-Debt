@@ -2,6 +2,16 @@
 
 Oxygen Debt is our entry for the COMP10 compiler challenge at the Low-Level Hackathon. The goal is to build `kopt`, a Python command that rewrites KIR programs to use fewer simulated Kiln cycles while preserving their behavior.
 
+Use Python 3.10 or later. Set `machine.cfg` to the path of a Kiln machine file, such as `machines/machine_default.cfg` from the official kit.
+
+```sh
+./build.sh
+./kopt input.kir --machine machine.cfg -o output.kir
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests
+```
+
+[Submission handoff and checklist](docs/SUBMISSION.md).
+
 `kopt` folds constants across blocks when reachable paths agree, propagates copies, and reuses equivalent computations and memory reads within a block. It uses signed ranges to simplify division and prove when ordinary memory accesses are in bounds. It replaces isolated conditional copies and constants with `select`, simplifies known branches, and bypasses jump-only chains. It removes unreachable blocks, unused safe loads, and certain overwritten stores. It hoists invariant arithmetic and doubles short loops to reduce jumps. It also reuses register names to reduce spills and combines a multiply or shift with an addition when the machine supports the fused operation.
 
 For simple counting loops, `kopt` can carry a proved memory value into the next iteration, preserving stores and traps.
@@ -11,14 +21,6 @@ Scheduling checks longer incoming/outgoing and repeated-cycle contexts when regi
 It also proves closed forms for bounded polynomial summations, schedules independent instructions, and specializes pure functions with at most twelve relevant masked input bits across up to two parameters. Specialization evaluates every value in the proven domain during compilation; it never reads benchmark input files or uses stored answers. [Proofs and limits](DESIGN.md)
 
 Fixed-trip bit loops are proved with word expressions or GF(2) coefficients, enabling parallel population count, bit reflection and source-derived CRC maps. A bounded portfolio also tries nested-loop hoisting/additive collapse, different memory, unrolling, scheduling and allocation combinations, and a proved checksum-remainder deferral alternative. Profiles weight timing cases; they never justify a rewrite. A static-control candidate expands bounded, fully known loop paths without reading RAM and optionally keeps a bounded cache of successful literal-address loads through fresh value names. Affine branch diamonds can become a select plus arithmetic. Guarded loops can clamp their trip count and restore the original predicate before a late trap; proved address loops also offer pointer induction and four-way unrolling with a check after every body. A second timing round compares these candidates against the prior winner using additional zero/dense/alternating RAM cases. Counted groups of 2/4/8 bodies are offered for memory loops only when ranges guarantee a complete first group and no signed wrap; the original scalar loop handles the tail. Their final selection rejects any candidate slower on a timing case. `--no-search` disables the whole-function portfolio for pass diagnostics.
-
-Use Python 3.10 or later. Set `machine.cfg` to the path of a Kiln machine file, such as `machines/machine_default.cfg` from the official kit.
-
-```sh
-./build.sh
-./kopt input.kir --machine machine.cfg -o output.kir
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests
-```
 
 The optional `--profile profile.prof` supplies edge counts for block layout. The optimizer uses them to estimate timing while keeping the entry block first and preserving explicit branch targets.
 
