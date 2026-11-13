@@ -79,3 +79,7 @@ For i'=i+s with s>0, i<n−(U−1)s proves that U original comparisons succeed. 
 ## Global register reuse follow-up
 
 The implementation derives standard def-use webs from a reaching-definition fixed point, then uses backwards liveness to construct a mutable-register interference graph. Initial values and dead writes require explicit interference treatment in KIR. Colouring and version-based pressure estimates propose candidates; source-level proofs establish validity. No competitor implementation was copied or executed. The prior public-comparison snapshots above are historical; [COMPARISON.md](COMPARISON.md) contains current pins and reports, and [BACKEND.md](BACKEND.md) contains the independent implementation proof and test evidence.
+
+## Cross-block memory follow-up
+
+The memory candidate is derived from must-available equations and ordinary affine substitution modulo 2^32. Its odd-coefficient inverse is exact because an odd word is invertible modulo 2^32; even coefficients drop dependent facts. Common holders and CFG duplication do not themselves remove reads: a second complete analysis must prove availability at each replacement. The first iteration retains the original guarded read. No peer implementation, sample RAM or named sorting recipe is used. [Proof, bounds and reproducible qualification](FORWARDING.md).

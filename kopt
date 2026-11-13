@@ -17,6 +17,7 @@ from src.expansion import cache_loads, expand
 from src.control import rewrite
 from src.groups import candidates as group_candidates
 from src.backend import candidates as backend_candidates
+from src.forwarding import candidates as memory_candidates
 
 
 def main():
@@ -94,6 +95,19 @@ def main():
             backends = backend_candidates(fallback, machine)
             if backends:
                 optimized = select(program, [fallback, *backends], machine, profile,
+                                   diverse=True, fallback_source=fallback, no_regressions=True)
+        if not args.no_search and 4 < len(program.instrs) <= 500:
+            fallback = optimized if optimized is not None else source
+            forwarded = []
+            for text in dict.fromkeys((source, fallback)):
+                for rewritten in memory_candidates(parse_program(text)):
+                    forwarded.append(rewritten)
+                    cleaned = optimize(parse_program(rewritten), rewritten, machine, profile)
+                    if cleaned is not None:
+                        forwarded.append(cleaned)
+                        forwarded.extend(backend_candidates(cleaned, machine))
+            if forwarded:
+                optimized = select(program, [fallback, *forwarded], machine, profile,
                                    diverse=True, fallback_source=fallback, no_regressions=True)
         args.output.write_bytes(original if optimized is None else optimized.encode("utf-8"))
     except (KirError, OSError, ValueError) as error:

@@ -10,6 +10,10 @@ jobs:
   verify:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [core, loops, memory]
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -19,28 +23,33 @@ jobs:
           git init "$RUNNER_TEMP/llh-26"
           git -C "$RUNNER_TEMP/llh-26" fetch --depth=1 https://github.com/rudra-shroff06/LLH-26.git d23ac1d865df4cdacf7ad8e9fff3e1d560761c46
           git -C "$RUNNER_TEMP/llh-26" checkout --detach FETCH_HEAD
-      - name: Verify build, CLI, demo, and benchmarks
+      - name: Verify build and independent regression group
         env:
           PYTHONDONTWRITEBYTECODE: "1"
+          TEST_SUITE: ${{ matrix.suite }}
         run: |
           export PATH="/usr/bin:/bin:$PATH"
           uname -sm
           python3 --version
           kit="$RUNNER_TEMP/llh-26/Compilers/COMP10"
           ./build.sh
-          python3 -m unittest discover -s tests
-          sh tests/demo.sh "$kit"
-          python3 tests/benchmark.py "$kit" --random 64 --seed 832719
-          python3 tests/stress.py "$kit"
-          python3 tests/summations.py "$kit"
-          python3 tests/finite.py "$kit"
-          python3 tests/scheduling.py "$kit"
-          python3 tests/rolling.py "$kit"
-          python3 tests/advanced.py "$kit"
-          python3 tests/metamorphic.py "$kit"
-          python3 tests/modulo.py "$kit"
-          python3 tests/expansion.py "$kit"
-          python3 tests/control.py "$kit"
-          python3 tests/groups.py "$kit"
-          python3 tests/backend.py "$kit"
-          python3 tests/holdout.py "$kit" --seed 863507 --report "$RUNNER_TEMP/holdout.json" --artifacts "$RUNNER_TEMP/holdout-failure"
+          case "$TEST_SUITE" in
+            core)
+              python3 -m unittest discover -s tests
+              sh tests/demo.sh "$kit"
+              python3 tests/benchmark.py "$kit" --random 64 --seed 832719
+              suites="stress scheduling backend"
+              ;;
+            loops)
+              suites="summations finite advanced modulo control groups metamorphic"
+              ;;
+            memory)
+              suites="rolling expansion forwarding"
+              ;;
+          esac
+          for suite in $suites; do
+            python3 "tests/$suite.py" "$kit"
+          done
+          if [ "$TEST_SUITE" = memory ]; then
+            python3 tests/holdout.py "$kit" --sorting --seed 927641 --report "$RUNNER_TEMP/holdout.json" --artifacts "$RUNNER_TEMP/holdout-failure"
+          fi

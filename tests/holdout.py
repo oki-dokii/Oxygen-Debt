@@ -41,7 +41,7 @@ def stream(base,delta,variant,mask=127,minimum=0):
     return 'func held(v0, v1, v2)\n'+''.join(label+':\n  '+'\n  '.join(items)+'\n' for label,items in blocks.items())
 
 
-def fixtures(seed=SEED):
+def fixtures(seed=SEED, include_sorting=False):
     rng=random.Random(seed);result=[]
     dimensions=((8,8,8),(16,16,16),(3,11,7),(7,2,13),(2,9,5),(5,0,3),(0,5,4),(4,3,0),(1,16,16),(16,1,8))
     for rows,cols,depth in dimensions:
@@ -56,6 +56,13 @@ def fixtures(seed=SEED):
     for base,delta in ((0,0),(5,-1),(3070,3),(4090,129)):
         for variant in ('plain','volatile','alias','division'):
             result.append(('long_stream',stream(base,delta,variant,63,128),{}))
+    if include_sorting:
+        from forwarding import window
+        for index in range(16):
+            base = rng.randrange(32, 1024)
+            mask = (31, 63)[index % 2]
+            text, _ = window(rng, index, sorting=True, base_override=base, mask_override=mask)
+            result.append(('sorting', text, dict(base=base, mask=mask)))
     # Different register identities and physical block orders from the proof suite.
     renamed=[]
     for family,text,settings in result:
@@ -87,6 +94,7 @@ def machines(default,seed=SEED):
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('kit',type=Path)
     parser.add_argument('--baseline',type=Path);parser.add_argument('--report',type=Path)
+    parser.add_argument('--sorting',action='store_true',help='also qualify fresh larger signed sorting loops')
     parser.add_argument('--seed',type=int,default=SEED)
     parser.add_argument('--artifacts',type=Path,default=Path('/tmp/oxygen-holdout-failure'))
     args=parser.parse_args();sys.dont_write_bytecode=True;kit=args.kit.resolve()
@@ -97,12 +105,13 @@ def main():
               [rng.getrandbits(32) if i%13==0 else 0 for i in range(4096)],
               [rng.getrandbits(32) for _ in range(4096)]]
     words=(0,1,3,4,7,8,9,15,31,32,33,63,64,65,127,0xFFFFFFFF,0x80000000)
-    count=oracles=0;outcomes=Counter();perf=Counter();totals=defaultdict(lambda:[0,0]);maximum=[0.0,0.0]
+    if args.sorting:patterns.extend([list(range(4096)),list(reversed(range(4096)))])
+    count=oracles=sorting_oracles=0;outcomes=Counter();perf=Counter();totals=defaultdict(lambda:[0,0]);maximum=[0.0,0.0]
     worst_ratio=None;worst_extra=None
     with tempfile.TemporaryDirectory(prefix='oxygen-holdout-') as folder:
         work=Path(folder);source=work/'held.kir';output=work/'out.kir';profile=work/'wrong.prof'
         for name,mc in configs.items():(work/f'{name}.cfg').write_text(''.join(f'{k} = {v}\n' for k,v in mc.items()))
-        for index,(family,text,settings) in enumerate(fixtures(args.seed)):
+        for index,(family,text,settings) in enumerate(fixtures(args.seed,args.sorting)):
             source.write_text(text);parsed=ref.load_program(source);original=ref.compile_program(parsed)
             profile.write_text(''.join(f'edge {owner} {target} {10**15 if j else 1}\n'
                 for ins,owner in zip(parsed.instrs,parsed.block_of) if ins.op=='br'
@@ -137,6 +146,13 @@ def main():
                     expected=(memory[settings['c']]+rows+(cols if rows else 0)+(depth if rows and cols else 0))&0xFFFFFFFF
                     if run.value!=expected or run.mem[:3072]!=memory[:3072]:fail(f'matrix oracle {index}',data)
                     oracles+=1
+            if family=='sorting':
+                for data,run in zip(inputs,references):
+                    if run.status!='RET':continue
+                    memory=data[1][0][1].copy();base=settings['base'];n=data[0][0]&settings['mask']
+                    memory[base:base+n]=sorted(memory[base:base+n],key=lambda v:v if v<2**31 else v-2**32)
+                    if run.value!=n or run.mem[:3072]!=memory[:3072]:fail(f'sorting oracle {index}',data)
+                    sorting_oracles+=1
             for name,mc in configs.items():
                 option=['--profile',profile] if index%3 else []
                 blobs=[]
@@ -179,8 +195,8 @@ def main():
                                         extra_cycles=b-a,ratio=b/a)
                             if worst_ratio is None or b*worst_ratio['before']>worst_ratio['after']*a:worst_ratio=detail
                             if worst_extra is None or b-a>worst_extra['extra_cycles']:worst_extra=detail
-    report=dict(seed=args.seed,fixtures=len(fixtures(args.seed)),machines=len(configs),inputs=10,matches=count,
-                matrix_oracles=oracles,reference_timeouts=0,outcomes=dict(outcomes),performance=dict(perf),
+    report=dict(seed=args.seed,fixtures=len(fixtures(args.seed,args.sorting)),machines=len(configs),inputs=10,matches=count,
+                matrix_oracles=oracles,sorting_oracles=sorting_oracles,reference_timeouts=0,outcomes=dict(outcomes),performance=dict(perf),
                 cycles=dict(totals),max_current_seconds=maximum[0],max_baseline_seconds=maximum[1],
                 baseline=str(args.baseline) if args.baseline else None,worst_slowdown=worst_ratio,worst_extra_cycles=worst_extra)
     if args.report:args.report.write_text(json.dumps(report,indent=2)+'\n')

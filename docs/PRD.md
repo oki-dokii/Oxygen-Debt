@@ -28,3 +28,5 @@ The remaining control targets add affine branch merging, min-bound explicit-trap
 Deadline qualification adds a frozen rollback baseline and a genuinely separate hold-out corpus. Counted grouping is retained only for guaranteed-long memory loops with a per-timing-case nonregression gate; unsuccessful short-loop experiments remain outside production selection.
 
 The global backend milestone adds bounded cross-block register reuse and pressure scheduling, with proof-based web splitting, previous-output fallback and independent qualification. See [BACKEND.md](BACKEND.md).
+
+The memory follow-up adds cross-block load forwarding and conditional iteration carries derived from source memory equations. It targets general branch/nest patterns, with preserved zero-trip/trap effects and independent larger signed-array qualification. See [FORWARDING.md](FORWARDING.md).

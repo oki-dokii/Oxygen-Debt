@@ -1,0 +1,174 @@
+{
+  "baseline": "/tmp/oxygen-before-forwarding/kopt",
+  "baseline_revision": "439106e2f045a02f288a52e27680714dc49ce21f",
+  "cycles": {
+    "long_stream": [
+      2791973,
+      2791973
+    ],
+    "matrix": [
+      77345020,
+      77344510
+    ],
+    "sorting": [
+      53357980,
+      49610457
+    ],
+    "stream": [
+      1350567,
+      1350567
+    ]
+  },
+  "fixtures": 92,
+  "inputs": 10,
+  "kit_revision": "d23ac1d865df4cdacf7ad8e9fff3e1d560761c46",
+  "machine_configs": {
+    "unseen_11": {
+      "fused_addsh": 1,
+      "fused_mac": 1,
+      "icache_penalty": 3,
+      "icache_size": 127,
+      "issue_width": 4,
+      "lat_addsh": 1,
+      "lat_alu": 1,
+      "lat_div": 5,
+      "lat_load": 41,
+      "lat_mac": 9,
+      "lat_mul": 3,
+      "mem_ports": 1,
+      "reg_spill_penalty": 3,
+      "registers": 11,
+      "taken_branch_penalty": 13
+    },
+    "unseen_19": {
+      "fused_addsh": 0,
+      "fused_mac": 0,
+      "icache_penalty": 0,
+      "icache_size": 257,
+      "issue_width": 6,
+      "lat_addsh": 1,
+      "lat_alu": 2,
+      "lat_div": 13,
+      "lat_load": 36,
+      "lat_mac": 16,
+      "lat_mul": 4,
+      "mem_ports": 3,
+      "reg_spill_penalty": 31,
+      "registers": 19,
+      "taken_branch_penalty": 4
+    },
+    "unseen_31": {
+      "fused_addsh": 0,
+      "fused_mac": 1,
+      "icache_penalty": 2,
+      "icache_size": 4096,
+      "issue_width": 8,
+      "lat_addsh": 4,
+      "lat_alu": 4,
+      "lat_div": 20,
+      "lat_load": 8,
+      "lat_mac": 1,
+      "lat_mul": 7,
+      "mem_ports": 4,
+      "reg_spill_penalty": 1,
+      "registers": 31,
+      "taken_branch_penalty": 29
+    },
+    "unseen_4": {
+      "fused_addsh": 0,
+      "fused_mac": 0,
+      "icache_penalty": 0,
+      "icache_size": 1,
+      "issue_width": 1,
+      "lat_addsh": 3,
+      "lat_alu": 2,
+      "lat_div": 25,
+      "lat_load": 29,
+      "lat_mac": 16,
+      "lat_mul": 14,
+      "mem_ports": 1,
+      "reg_spill_penalty": 23,
+      "registers": 4,
+      "taken_branch_penalty": 0
+    },
+    "unseen_5": {
+      "fused_addsh": 0,
+      "fused_mac": 1,
+      "icache_penalty": 7,
+      "icache_size": 17,
+      "issue_width": 2,
+      "lat_addsh": 10,
+      "lat_alu": 6,
+      "lat_div": 2,
+      "lat_load": 1,
+      "lat_mac": 2,
+      "lat_mul": 4,
+      "mem_ports": 1,
+      "reg_spill_penalty": 0,
+      "registers": 5,
+      "taken_branch_penalty": 37
+    },
+    "unseen_7": {
+      "fused_addsh": 1,
+      "fused_mac": 0,
+      "icache_penalty": 1,
+      "icache_size": 37,
+      "issue_width": 3,
+      "lat_addsh": 10,
+      "lat_alu": 3,
+      "lat_div": 20,
+      "lat_load": 25,
+      "lat_mac": 1,
+      "lat_mul": 12,
+      "mem_ports": 2,
+      "reg_spill_penalty": 11,
+      "registers": 7,
+      "taken_branch_penalty": 1
+    }
+  },
+  "machines": 6,
+  "matches": 5520,
+  "matrix_oracles": 220,
+  "max_baseline_seconds": 3.3031624580034986,
+  "max_current_seconds": 0.8607729999930598,
+  "outcomes": {
+    "RET": 4128,
+    "bad_address": 1314,
+    "div_by_zero": 24,
+    "explicit(1)": 54
+  },
+  "performance": {
+    "faster": 709,
+    "slower": 28,
+    "tied": 4783
+  },
+  "reference_timeouts": 0,
+  "seed": 927641,
+  "sorting_oracles": 160,
+  "worst_extra_cycles": {
+    "after": 181439,
+    "before": 172879,
+    "case": 89,
+    "extra_cycles": 8560,
+    "family": "sorting",
+    "input": [
+      127,
+      3
+    ],
+    "machine": "unseen_7",
+    "ratio": 1.0495144002452583
+  },
+  "worst_slowdown": {
+    "after": 362,
+    "before": 327,
+    "case": 84,
+    "extra_cycles": 35,
+    "family": "sorting",
+    "input": [
+      3,
+      15
+    ],
+    "machine": "unseen_7",
+    "ratio": 1.107033639143731
+  }
+}
